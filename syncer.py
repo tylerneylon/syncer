@@ -8,20 +8,35 @@
 
 import fcntl
 from optparse import OptionParser
+import os
 import sys
 import termios
+
+# Internal names start with an underscore.
+
 
 # globals
 # =======
 
-# Globals start with an underscore.
-
 _verbose = False  # TODO Remove if unused.
 
-# public functions
-# ================
+# The string used in .syncer to denote name-path pairs.
+_repos_header = 'name-path pairs'
 
-def handleArgs(args):
+# _repos = [[repoName, repoPath]]
+_repos = []
+
+# The string used in .syncer to denote file-file pairs.
+_pairs_header = 'file-file pairs'
+
+# _pairs = [[path1, path2]]
+_pairs = []
+
+
+# internal functions
+# ==================
+
+def _handleArgs(args):
   global _verbose
   myName = sys.argv[0].split('/')[-1]
   usage = """
@@ -35,8 +50,31 @@ def handleArgs(args):
     #runInteractive(parser)
     pass
 
+
 # input functions
 # ===============
+
+def _loadConfig():
+  pass  # TODO
+
+# Save the current set of tracked files; while running, this
+# data is kept in _repos and _pairs.
+def _saveConfig():
+  global _repos, _pairs
+  # TEMP
+  if True:
+    _repos.append(['name1', 'path1'])
+    _repos.append(['name2', 'path2'])
+    _pairs.append(['path3', 'path4'])
+    _pairs.append(['path5', 'path6'])
+  configPath = os.path.expanduser('~/.syncer')
+  with open(configPath, 'w') as f:
+    if _repos:
+      f.write('%s:\n' % _repos_header)
+      for repo in _repos: f.write('  %s %s\n' % tuple(repo))
+    if _pairs:
+      f.write('%s:\n' % _pairs_header)
+      for pair in _pairs: f.write('  %s %s\n' % tuple(pair))
 
 def _getch():
   fd = sys.stdin.fileno()
@@ -60,13 +98,14 @@ def _getch():
     fcntl.fcntl(fd, fcntl.F_SETFL, oldflags)
   return c
 
-# Main
+
+# main
 # ====
 
 if __name__ ==  "__main__":
   try:
-    handleArgs(sys.argv)
+    _handleArgs(sys.argv)
   except KeyboardInterrupt:
     print("\nCheerio!")
     exit(1)
-  #_saveConfig()  # TODO
+  _saveConfig()
