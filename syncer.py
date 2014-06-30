@@ -55,12 +55,25 @@ def _handleArgs(args):
   okActions = ['track', 'check']
   if action in okActions: _loadConfig()
   if   action == 'track':
-    pass
+    _track(args[2:])
   elif action == 'check':
     pass
   else:
     print('Unrecognized action: %s.' % action)
     parser.print_help()
+
+def _track(actionArgs):
+  global _repos, _pairs
+  if len(actionArgs) < 1 or len(actionArgs) > 2:
+    print('Expected one or two parameters as items to track.')
+    exit(2)
+  if len(actionArgs) == 1:  # Track a repo/path pair.
+    _repos.append([actionArgs[0], os.getcwd()])
+    print('Started tracking the repo and dir:\n%s\n%s' % tuple(_repos[-1]))
+  if len(actionArgs) == 2:  # Track a file/file pair.
+    # TODO Check that files exist and convert to absolute paths.
+    _pairs.append(actionArgs)
+    print('Started tracking the files:\n%s\n%s' % tuple(_pairs[-1]))
 
 
 # input functions
