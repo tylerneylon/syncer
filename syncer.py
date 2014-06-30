@@ -42,9 +42,9 @@ def _handleArgs(args):
   global _verbose
   myName = sys.argv[0].split('/')[-1]
   usage = """
-             %s track <url>            # Track the current directory paired with the given url (for a home repo).
+             %s track <repo-name>      # Track the current dir with the given repo name (a name may be, e.g., a github url).
              %s track <file1> <file2>  # Track the given file pair.
-             %s check                  # Check all known url/dir and file/file pairs for differences."""
+             %s check                  # Check all known repo-name/dir and file/file pairs for differences."""
   usage = usage % (myName, myName, myName)
   parser = OptionParser(usage=usage)
   (options, args) = parser.parse_args(args)
