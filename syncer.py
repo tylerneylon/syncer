@@ -20,6 +20,8 @@ import termios
 
 _verbose = False  # TODO Remove if unused.
 
+_configPath = os.path.expanduser('~/.syncer')
+
 # The string used in .syncer to denote name-path pairs.
 _repos_header = 'name-path pairs'
 
@@ -46,29 +48,43 @@ def _handleArgs(args):
   usage = usage % (myName, myName, myName)
   parser = OptionParser(usage=usage)
   (options, args) = parser.parse_args(args)
-  if False and len(args) <= 1:  # TODO Probably just show help in this case.
-    #runInteractive(parser)
+  if len(args) <= 1:
+    parser.print_help()
+    return
+  action = args[1]
+  okActions = ['track', 'check']
+  if action in okActions: _loadConfig()
+  if   action == 'track':
     pass
+  elif action == 'check':
+    pass
+  else:
+    print('Unrecognized action: %s.' % action)
+    parser.print_help()
 
 
 # input functions
 # ===============
 
 def _loadConfig():
-  pass  # TODO
+  global _repos, _pairs
+  if not os.path.isfile(_configPath): return  # First run; empty lists are ok.
+  addingTo = None
+  with open(_configPath, 'r') as f:
+    for line in f:
+      if len(line.strip()) == 0: continue
+      if line.startswith(_repos_header):
+        addingTo = _repos
+      elif line.startswith(_pairs_header):
+        addingTo = _pairs
+      elif addingTo is not None:
+        addingTo.append(line.strip().split(' '))
 
 # Save the current set of tracked files; while running, this
 # data is kept in _repos and _pairs.
 def _saveConfig():
   global _repos, _pairs
-  # TEMP
-  if True:
-    _repos.append(['name1', 'path1'])
-    _repos.append(['name2', 'path2'])
-    _pairs.append(['path3', 'path4'])
-    _pairs.append(['path5', 'path6'])
-  configPath = os.path.expanduser('~/.syncer')
-  with open(configPath, 'w') as f:
+  with open(_configPath, 'w') as f:
     if _repos:
       f.write('%s:\n' % _repos_header)
       for repo in _repos: f.write('  %s %s\n' % tuple(repo))
