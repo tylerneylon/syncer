@@ -57,7 +57,7 @@ def _handleArgs(args):
   if   action == 'track':
     _track(args[2:])
   elif action == 'check':
-    pass
+    _check(args[2:])
   else:
     print('Unrecognized action: %s.' % action)
     parser.print_help()
@@ -74,6 +74,13 @@ def _track(actionArgs):
     # TODO Check that files exist and convert to absolute paths.
     _pairs.append(actionArgs)
     print('Started tracking the files:\n%s\n%s' % tuple(_pairs[-1]))
+
+def _check(actionArgs):
+  global _repos, _pairs
+  if len(actionArgs) > 0:
+    print('Unexpected arguments after "check": %s' % ' '.join(actionArgs))
+    exit(2)
+  # TODO Compare files.
 
 def _loadConfig():
   global _repos, _pairs
