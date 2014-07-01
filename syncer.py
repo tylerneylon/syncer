@@ -9,6 +9,7 @@
 import fcntl
 from optparse import OptionParser
 import os
+import os.path
 import sys
 import termios
 
@@ -81,7 +82,14 @@ def _check(actionArgs):
   if len(actionArgs) > 0:
     print('Unexpected arguments after "check": %s' % ' '.join(actionArgs))
     exit(2)
-  # TODO Compare files.
+  for name, root in _repos:
+    for path, dirs, files in os.walk(root):
+      for file in files:
+        # TODO
+        print('Would now consider %s' % os.path.join(path, file))
+  for path1, path2 in _pairs:
+    print('Would now compare these two paths:\n%s\n%s' % (path1, path2))
+    # TODO
 
 def _loadConfig():
   global _repos, _pairs
