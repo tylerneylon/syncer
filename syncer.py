@@ -52,15 +52,16 @@ def _handleArgs(args):
     parser.print_help()
     return
   action = args[1]
-  okActions = ['track', 'check']
-  if action in okActions: _loadConfig()
   if   action == 'track':
+    _loadConfig()
     _track(args[2:])
   elif action == 'check':
+    _loadConfig()
     _check(args[2:])
   else:
     print('Unrecognized action: %s.' % action)
     parser.print_help()
+    exit(2)
 
 def _track(actionArgs):
   global _repos, _pairs
