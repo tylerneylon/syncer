@@ -75,10 +75,6 @@ def _track(actionArgs):
     _pairs.append(actionArgs)
     print('Started tracking the files:\n%s\n%s' % tuple(_pairs[-1]))
 
-
-# input functions
-# ===============
-
 def _loadConfig():
   global _repos, _pairs
   if not os.path.isfile(_configPath): return  # First run; empty lists are ok.
@@ -104,6 +100,10 @@ def _saveConfig():
     if _pairs:
       f.write('%s:\n' % _pairs_header)
       for pair in _pairs: f.write('  %s %s\n' % tuple(pair))
+
+
+# input functions
+# ===============
 
 def _getch():
   fd = sys.stdin.fileno()
