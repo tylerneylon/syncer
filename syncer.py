@@ -88,11 +88,10 @@ def _check(actionArgs):
       for filename in files:
         filePath = os.path.join(path, filename)
         homeInfo = _check_for_home_info(filePath)
-        if homeInfo is None: continue
+        if homeInfo is None:    continue
+        if homeInfo[0] == name: continue
         homeFilePath = _findFilePath(homeInfo, filePath)
-        if homeFilePath is None:
-          print('Warning: unable to find home version of %s.' % filePath)
-          continue
+        if homeFilePath is None: continue  # An error is already printed by _findFilePath.
         _compareFullPaths(homeFilePath, filePath)
   for path1, path2 in _pairs:
     print('Would now compare these two paths:\n%s\n%s' % (path1, path2))
@@ -121,7 +120,26 @@ def _check_for_home_info(filePath):
 # and resolves a file path for the home version. Emits a warning if
 # multiple files match the given homeInfo.
 def _findFilePath(homeInfo, filePath):
-  return None  # TODO
+  global _repos
+  for name, root in _repos:
+    if homeInfo[0] == name: homeRoot = root
+  base = os.path.basename(filePath)
+  if homeInfo[1]:
+    homePath = os.path.join(homeRoot, homeInfo[1], base)
+    if not os.path.isfile(homePath):
+      print('Error: %s pointed to home version %s, but it doesn\'t exist.' % (filePath, homePath))
+      return None
+    return homePath
+  # Handle the case that no subdir was given; we must walk the dir to find it.
+  candidate = None
+  for path, dirs, files in os.walk(homeRoot):
+    if base not in files: continue
+    homeFilePath = os.path.join(path, base)
+    if candidate:
+      fmt = 'Warning: found multiple possible home paths for %s. First two matches are:\n%s\n%s'
+      print(fmt % (filePath, candidate, homeFilePath))
+    candidate = homeFilePath
+  return candidate
 
 # Internally compares the given files. The results are stored in TODO.
 def _compareFullPaths(path1, path2):
