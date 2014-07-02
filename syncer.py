@@ -10,6 +10,7 @@ import fcntl
 from optparse import OptionParser
 import os
 import os.path
+import re
 import sys
 import termios
 
@@ -84,12 +85,48 @@ def _check(actionArgs):
     exit(2)
   for name, root in _repos:
     for path, dirs, files in os.walk(root):
-      for file in files:
-        # TODO
-        print('Would now consider %s' % os.path.join(path, file))
+      for filename in files:
+        filePath = os.path.join(path, filename)
+        homeInfo = _check_for_home_info(filePath)
+        if homeInfo is None: continue
+        homeFilePath = _findFilePath(homeInfo, filePath)
+        if homeFilePath is None:
+          print('Warning: unable to find home version of %s.' % filePath)
+          continue
+        _compareFullPaths(homeFilePath, filePath)
   for path1, path2 in _pairs:
     print('Would now compare these two paths:\n%s\n%s' % (path1, path2))
     # TODO
+
+# Checks for a recognized repo name on line 3.
+# Returns [homeDir, homeSubdir] if found; homeSubdir may be None;
+# return None if no repo name is recognized.
+def _check_for_home_info(filePath):
+  global _repos
+  with open(filePath, 'r') as f:
+    try:
+      fileStart = f.read(4096)
+    except:  # This can be caused by trying to read a binary file as if it were utf-8.
+      return None
+    startLines = fileStart.split('\n')
+    if len(startLines) < 3: return None
+    line3 = startLines[2]
+    for name, root in _repos:
+      regex = r'(%s)(?: in (\S+))?' % name
+      m = re.search(regex, line3)
+      if m is None: continue
+      return [m.group(1), m.group(2)]
+
+# Takes a [homeDir, homeSubdir] pair as returned from _check_for_home_info,
+# and resolves a file path for the home version. Emits a warning if
+# multiple files match the given homeInfo.
+def _findFilePath(homeInfo, filePath):
+  return None  # TODO
+
+# Internally compares the given files. The results are stored in TODO.
+def _compareFullPaths(path1, path2):
+  print('_compareFullPaths(%s, %s)' % (path1, path2))
+  pass  # TODO
 
 def _loadConfig():
   global _repos, _pairs
