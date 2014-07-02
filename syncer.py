@@ -6,10 +6,13 @@
 # imports
 # =======
 
+import difflib
 import fcntl
+import filecmp
 from optparse import OptionParser
 import os
 import os.path
+import pprint
 import re
 import sys
 import termios
@@ -35,6 +38,15 @@ _pairs_header = 'file-file pairs'
 
 # _pairs = [[path1, path2]]
 _pairs = []
+
+# For accumulating differences.
+# {homePath: set(copyPaths)}
+_diffsByHomePath = {}
+
+# For displaying minimally identifying strings for files.
+# {basename: set(homePaths)}
+# File/file pairs read from this, but won't add to it.
+_pathsByBasename = {}
 
 
 # internal functions
@@ -96,6 +108,12 @@ def _check(actionArgs):
   for path1, path2 in _pairs:
     print('Would now compare these two paths:\n%s\n%s' % (path1, path2))
     # TODO
+  # TEMP Also drop the import pprint that is just for this bit.
+  print('At end of _check.')
+  print('_diffsByHomePath:')
+  pprint.pprint(_diffsByHomePath)
+  print('_pathsByBasename:')
+  pprint.pprint(_pathsByBasename)
 
 # Checks for a recognized repo name on line 3.
 # Returns [homeDir, homeSubdir] if found; homeSubdir may be None;
@@ -142,9 +160,14 @@ def _findFilePath(homeInfo, filePath):
   return candidate
 
 # Internally compares the given files. The results are stored in TODO.
-def _compareFullPaths(path1, path2):
-  print('_compareFullPaths(%s, %s)' % (path1, path2))
-  pass  # TODO
+# If one path is a homePath, this expects that as the first argument.
+def _compareFullPaths(path1, path2, isRepo=True):
+  # TODO Update this to correctly handle the non-repo (aka file/file pair) case.
+  print('_compareFullPaths(%s, %s)' % (path1, path2))  # TEMP
+  if filecmp.cmp(path1, path2): return  # No difference.
+  _diffsByHomePath.setdefault(path1, set()).add(path2)
+  base = os.path.basename(path1)
+  _pathsByBasename.setdefault(base, set()).add(path1)
 
 def _loadConfig():
   global _repos, _pairs
