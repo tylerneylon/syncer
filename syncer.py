@@ -106,7 +106,7 @@ def _check(actionArgs):
         if homeFilePath is None: continue  # An error is already printed by _findFilePath.
         _compareFullPaths(homeFilePath, filePath)
   for path1, path2 in _pairs:
-    _compareFullPaths(path1, path2)
+    _compareFullPaths(path1, path2, ignoreLine3=True)
   # TEMP Also drop the import pprint that is just for this bit.
   print('At end of _check.')
   print('_diffsByHomePath:')
@@ -161,12 +161,27 @@ def _findFilePath(homeInfo, filePath):
 # Internally compares the given files.
 # The results are stored in _diffsByHomePath and _pathsByBasename.
 # If one path is a homePath, this expects that as the first argument.
-def _compareFullPaths(path1, path2):
+def _compareFullPaths(path1, path2, ignoreLine3=False):
   print('_compareFullPaths(%s, %s)' % (path1, path2))  # TEMP
-  if filecmp.cmp(path1, path2): return  # No difference.
+  if _filesAreSame(path1, path2, ignoreLine3): return
   _diffsByHomePath.setdefault(path1, set()).add(path2)
   base = os.path.basename(path1)
   _pathsByBasename.setdefault(base, set()).add(path1)
+
+def _filesAreSame(path1, path2, ignoreLine3=False):
+  if not ignoreLine3: return filecmp.cmp(path1, path2)
+  # We need to do more work to ignore line 3.
+  lines = [None, None]
+  paths = [path1, path2]
+  for i in [0, 1]:
+    lines[i] = _linesOfFile(paths[i])
+    lines[i] = lines[i][:2] + lines[i][3:]  # Exclude line 3 (item [2] in a 0-indexed list).
+  return lines[0] == lines[1]
+
+def _linesOfFile(path):
+  with open(path, 'r') as f:
+    lines = f.readlines()
+  return lines
 
 def _loadConfig():
   global _repos, _pairs
