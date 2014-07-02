@@ -106,8 +106,7 @@ def _check(actionArgs):
         if homeFilePath is None: continue  # An error is already printed by _findFilePath.
         _compareFullPaths(homeFilePath, filePath)
   for path1, path2 in _pairs:
-    print('Would now compare these two paths:\n%s\n%s' % (path1, path2))
-    # TODO
+    _compareFullPaths(path1, path2)
   # TEMP Also drop the import pprint that is just for this bit.
   print('At end of _check.')
   print('_diffsByHomePath:')
@@ -159,10 +158,10 @@ def _findFilePath(homeInfo, filePath):
     candidate = homeFilePath
   return candidate
 
-# Internally compares the given files. The results are stored in TODO.
+# Internally compares the given files.
+# The results are stored in _diffsByHomePath and _pathsByBasename.
 # If one path is a homePath, this expects that as the first argument.
-def _compareFullPaths(path1, path2, isRepo=True):
-  # TODO Update this to correctly handle the non-repo (aka file/file pair) case.
+def _compareFullPaths(path1, path2):
   print('_compareFullPaths(%s, %s)' % (path1, path2))  # TEMP
   if filecmp.cmp(path1, path2): return  # No difference.
   _diffsByHomePath.setdefault(path1, set()).add(path2)
