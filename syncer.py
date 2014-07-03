@@ -91,7 +91,7 @@ def _track(actionArgs):
     print('Started tracking the files:\n%s\n%s' % tuple(_pairs[-1]))
 
 def _check(actionArgs):
-  global _repos, _pairs
+  global _repos, _pairs, _testReminder
   if len(actionArgs) > 0:
     print('Unexpected arguments after "check": %s' % ' '.join(actionArgs))
     exit(2)
@@ -108,11 +108,37 @@ def _check(actionArgs):
   for path1, path2 in _pairs:
     _compareFullPaths(path1, path2, ignoreLine3=True)
   # TEMP Also drop the import pprint that is just for this bit.
-  print('At end of _check.')
+  print('Comparisons are done in _check.')
   print('_diffsByHomePath:')
   pprint.pprint(_diffsByHomePath)
   print('_pathsByBasename:')
   pprint.pprint(_pathsByBasename)
+
+  homePaths = list(_diffsByHomePath.keys())
+  _showDiffsInOrder(homePaths)
+  pathIndex = _askUserForDiffIndex()
+  chosenPaths = [homePaths[pathIndex]] if pathIndex != -1 else homePaths
+  for homePath in chosenPaths: _letUserHandleDiff(homePath)
+  _testReminder = _getTestReminder()
+
+# Shows something like the following for each given homePath:
+#   [1] <basename> [in repo name if not unique]
+#         uniq_subpath:basename > uniq_subpath:basename
+def _showDiffsInOrder(homePaths):
+  pass  # TODO
+
+# Present the user with an action prompt and receive their input.
+def _askUserForDiffIndex():
+  return -1  # TODO
+
+# Present a specific diff and let the user respond to it.
+def _letUserHandleDiff(homePath):
+  pass  # TODO
+
+# Return a string to remind the user what they need to test based
+# on their latest check action.
+def _getTestReminder():
+  return ''  # TODO
 
 # Checks for a recognized repo name on line 3.
 # Returns [homeDir, homeSubdir] if found; homeSubdir may be None;
@@ -184,6 +210,7 @@ def _linesOfFile(path):
   return lines
 
 def _loadConfig():
+  # TODO Load _testReminder
   global _repos, _pairs
   if not os.path.isfile(_configPath): return  # First run; empty lists are ok.
   addingTo = None
@@ -200,6 +227,7 @@ def _loadConfig():
 # Save the current set of tracked files; while running, this
 # data is kept in _repos and _pairs.
 def _saveConfig():
+  # TODO Save _testReminder
   global _repos, _pairs
   with open(_configPath, 'w') as f:
     if _repos:
