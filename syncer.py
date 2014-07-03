@@ -143,8 +143,8 @@ def _showDiffsInOrder(homePaths):
     print('\n' + prefix + base + suffix)
     for diffPath in _diffsByHomePath[homePath]:
       uniq1, uniq2 = _getUniqSubpaths(homePath, diffPath)
-      cmpStr = _comparePathsByTime(homePath, diffPath)
-      print('          %30s:%10s%s%30s:%10s' % (uniq1, base, cmpStr, uniq2, base))
+      cmpStr = _comparePathsByTime(homePath, diffPath).center(20)
+      print('          %24s:%10s%s%24s:%10s' % (uniq1, base, cmpStr, uniq2, base))
   print('')  # End-of-section newline.
 
 # Removes the common prefix and suffix from the given pair.
@@ -162,9 +162,13 @@ def _getUniqSubpaths(path1, path2):
   return uniq1, uniq2
 
 # Returns a comparison result string based on the files' timestamps.
-# Return values are '<-newer', 'newer->' or '  !=   ' (all 7 chars long).
+# Return values are '<-newer  ', '  newer->' or '!='.
 def _comparePathsByTime(path1, path2):
-  return '  !=   '  # TODO
+  t1 = os.path.getmtime(path1)
+  t2 = os.path.getmtime(path2)
+  if t1 < t2: return '  newer->'
+  if t1 > t2: return '<-newer  '
+  return '!='
 
 # Present the user with an action prompt and receive their input.
 def _askUserForDiffIndex():
