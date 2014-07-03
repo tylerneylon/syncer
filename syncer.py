@@ -203,10 +203,12 @@ def _letUserHandleDiff(homePath):
   print(_diffHeader % base.center(_basenameWidth))
   # TODO Improve differentiating between these (in the following for loop).
   for diffPath in _diffsByHomePath[homePath]:
-    short1, short2 = _shortNames(homePath, diffPath)
+    homeIsOlder = (os.path.getmtime(homePath) < os.path.getmtime(diffPath))
+    oldpath, newpath = (homePath, diffPath) if homeIsOlder else (diffPath, homePath)
+    short1, short2 = _shortNames(oldpath, newpath)
     diff = difflib.unified_diff(
-        _fileLines(homePath), _fileLines(diffPath),
-        fromfile=homePath, tofile=diffPath)
+        _fileLines(oldpath), _fileLines(newpath),
+        fromfile=short1, tofile=short2)
     for line in diff: print(line, end='')
   print(_diffFooter % base.center(_basenameWidth))
   # TODO
