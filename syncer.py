@@ -3,6 +3,10 @@
 # TODO Intro comments here.
 #
 
+# Future TODO Items:
+#  * In _showDiffsInOrder, minimize the column widths based on string sizes.
+#
+
 # imports
 # =======
 
@@ -17,11 +21,12 @@ import re
 import sys
 import termios
 
-# Internal names start with an underscore.
 
 
 # globals
 # =======
+
+# Internal names start with an underscore.
 
 _verbose = False  # TODO Remove if unused.
 
@@ -139,13 +144,22 @@ def _showDiffsInOrder(homePaths):
     for diffPath in _diffsByHomePath[homePath]:
       uniq1, uniq2 = _getUniqSubpaths(homePath, diffPath)
       cmpStr = _comparePathsByTime(homePath, diffPath)
-      print('        %8s:%10s%s%8s:%10s' % (uniq1, base, cmpStr, uniq2, base))
+      print('          %30s:%10s%s%30s:%10s' % (uniq1, base, cmpStr, uniq2, base))
   print('')  # End-of-section newline.
 
 # Removes the common prefix and suffix from the given pair.
+# Expects the paths to be unequal.
 # In other words, given strings of the form ABC, ADC, this returns B, D.
 def _getUniqSubpaths(path1, path2):
-  return '<uniq1>', '<uniq2>'  # TODO
+  dirs1 = path1.split(os.sep)
+  dirs2 = path2.split(os.sep)
+  preIdx = 0
+  postIdx = -1
+  while dirs1[preIdx]  == dirs2[preIdx] : preIdx += 1
+  while dirs1[postIdx] == dirs2[postIdx]: postIdx -= 1
+  uniq1 = os.path.join(*dirs1[preIdx:postIdx + 1])
+  uniq2 = os.path.join(*dirs2[preIdx:postIdx + 1])
+  return uniq1, uniq2
 
 # Returns a comparison result string based on the files' timestamps.
 # Return values are '<-newer', 'newer->' or '  !=   ' (all 7 chars long).
