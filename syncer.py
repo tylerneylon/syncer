@@ -64,7 +64,7 @@ def _handleArgs(args):
   (options, args) = parser.parse_args(args)
   if len(args) <= 1:
     parser.print_help()
-    return
+    exit(2)
   action = args[1]
   if   action == 'track':
     _loadConfig()
