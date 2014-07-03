@@ -19,7 +19,6 @@ import os.path
 import pprint
 import re
 import sys
-import termios
 
 
 
@@ -52,6 +51,8 @@ _diffsByHomePath = {}
 # {basename: set(homePaths)}
 # File/file pairs read from this, but won't add to it.
 _pathsByBasename = {}
+
+_horizBreak = '---------------------------'
 
 
 # internal functions
@@ -100,6 +101,7 @@ def _check(actionArgs):
   if len(actionArgs) > 0:
     print('Unexpected arguments after "check": %s' % ' '.join(actionArgs))
     exit(2)
+  print('Checking for differences.')
   for name, root in _repos:
     for path, dirs, files in os.walk(root):
       for filename in files:
@@ -123,7 +125,8 @@ def _check(actionArgs):
 
   homePaths = list(_diffsByHomePath.keys())
   _showDiffsInOrder(homePaths)
-  pathIndex = _askUserForDiffIndex()
+  pathIndex = _askUserForDiffIndex(homePaths)
+  print('pathIndex=%d' % pathIndex) # TEMP
   chosenPaths = [homePaths[pathIndex]] if pathIndex != -1 else homePaths
   for homePath in chosenPaths: _letUserHandleDiff(homePath)
   _testReminder = _getTestReminder()
@@ -171,8 +174,19 @@ def _comparePathsByTime(path1, path2):
   return '!='
 
 # Present the user with an action prompt and receive their input.
-def _askUserForDiffIndex():
-  return -1  # TODO
+def _askUserForDiffIndex(homePaths):
+  print(_horizBreak)
+  numPaths = len(homePaths)
+  okChars = ['a'] + list(map(str, range(1, numPaths + 1)))
+  oneFileChoices = '1' if numPaths == 1 else '1-%d' % min(numPaths, 9)
+  print('Actions: [%s] handle a file; handle [a]ll files.' % oneFileChoices)
+  print('What would you like to do?')
+  c = _getch()
+  while c not in okChars:
+    print('Please press one of the keys [' + ''.join(okChars) + ']')
+    c = _getch()
+  # We return either a 0-based index of the path, or -1 for the 'all' choice.
+  return okChars.index(c) - 1
 
 # Present a specific diff and let the user respond to it.
 def _letUserHandleDiff(homePath):
@@ -285,27 +299,32 @@ def _saveConfig():
 # input functions
 # ===============
 
-def _getch():
-  fd = sys.stdin.fileno()
+# This implementation is from stackoverflow, here:
+# http://stackoverflow.com/a/21659588
 
-  oldterm = termios.tcgetattr(fd)
-  newattr = termios.tcgetattr(fd)
-  newattr[3] = newattr[3] & ~termios.ICANON & ~termios.ECHO
-  termios.tcsetattr(fd, termios.TCSANOW, newattr)
+def _find_getch():
+    try:
+        import termios
+    except ImportError:
+        # Non-POSIX. Return msvcrt's (Windows') getch.
+        import msvcrt
+        return msvcrt.getch
 
-  oldflags = fcntl.fcntl(fd, fcntl.F_GETFL)
-  fcntl.fcntl(fd, fcntl.F_SETFL, oldflags | os.O_NONBLOCK)
+    # POSIX system. Create and return a getch that manipulates the tty.
+    import sys, tty
+    def _getch():
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
+        try:
+            tty.setraw(fd)
+            ch = sys.stdin.read(1)
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+        return ch
 
-  try:        
-    while 1:            
-      try:
-        c = sys.stdin.read(1)
-        break
-      except IOError: pass
-  finally:
-    termios.tcsetattr(fd, termios.TCSAFLUSH, oldterm)
-    fcntl.fcntl(fd, fcntl.F_SETFL, oldflags)
-  return c
+    return _getch
+
+_getch = _find_getch()
 
 
 # main
