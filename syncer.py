@@ -107,12 +107,14 @@ def _check(actionArgs):
         _compareFullPaths(homeFilePath, filePath)
   for path1, path2 in _pairs:
     _compareFullPaths(path1, path2, ignoreLine3=True)
-  # TEMP Also drop the import pprint that is just for this bit.
-  print('Comparisons are done in _check.')
-  print('_diffsByHomePath:')
-  pprint.pprint(_diffsByHomePath)
-  print('_pathsByBasename:')
-  pprint.pprint(_pathsByBasename)
+
+  # Turn this on if useful for debugging.
+  if False:
+    print('Comparisons are done in _check.')
+    print('_diffsByHomePath:')
+    pprint.pprint(_diffsByHomePath)
+    print('_pathsByBasename:')
+    pprint.pprint(_pathsByBasename)
 
   homePaths = list(_diffsByHomePath.keys())
   _showDiffsInOrder(homePaths)
@@ -125,7 +127,30 @@ def _check(actionArgs):
 #   [1] <basename> [in repo name if not unique]
 #         uniq_subpath:basename > uniq_subpath:basename
 def _showDiffsInOrder(homePaths):
-  pass  # TODO
+  if len(homePaths) == 0:
+    print('No differences found.')
+    exit(0)
+  print('Differences found:')
+  for i, homePath in enumerate(homePaths):
+    prefix = '  [%d] ' % (i + 1) if i < 9 else '  [ ] '
+    base = os.path.basename(homePath)
+    suffix = '' if len(_pathsByBasename[base]) == 1 else (' in ' + homePath)
+    print('\n' + prefix + base + suffix)
+    for diffPath in _diffsByHomePath[homePath]:
+      uniq1, uniq2 = _getUniqSubpaths(homePath, diffPath)
+      cmpStr = _comparePathsByTime(homePath, diffPath)
+      print('        %8s:%10s%s%8s:%10s' % (uniq1, base, cmpStr, uniq2, base))
+  print('')  # End-of-section newline.
+
+# Removes the common prefix and suffix from the given pair.
+# In other words, given strings of the form ABC, ADC, this returns B, D.
+def _getUniqSubpaths(path1, path2):
+  return '<uniq1>', '<uniq2>'  # TODO
+
+# Returns a comparison result string based on the files' timestamps.
+# Return values are '<-newer', 'newer->' or '  !=   ' (all 7 chars long).
+def _comparePathsByTime(path1, path2):
+  return '  !=   '  # TODO
 
 # Present the user with an action prompt and receive their input.
 def _askUserForDiffIndex():
@@ -188,7 +213,8 @@ def _findFilePath(homeInfo, filePath):
 # The results are stored in _diffsByHomePath and _pathsByBasename.
 # If one path is a homePath, this expects that as the first argument.
 def _compareFullPaths(path1, path2, ignoreLine3=False):
-  print('_compareFullPaths(%s, %s)' % (path1, path2))  # TEMP
+  # Turn this on if useful for debugging.
+  if False: print('_compareFullPaths(%s, %s)' % (path1, path2))
   if _filesAreSame(path1, path2, ignoreLine3): return
   _diffsByHomePath.setdefault(path1, set()).add(path2)
   base = os.path.basename(path1)
