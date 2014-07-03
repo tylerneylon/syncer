@@ -52,7 +52,16 @@ _diffsByHomePath = {}
 # File/file pairs read from this, but won't add to it.
 _pathsByBasename = {}
 
-_horizBreak = '---------------------------'
+# The following are all designed to be the same length when printed.
+# They'll be nicely aligned as long as the basename is <= 20 chars.
+
+_basenameWidth = 20
+#                                 1         2
+#                1234567 12345678901234567890 1234567
+_horizBreak =   '------------------------------------'
+_diffHeader = '\nvvvvvvv %20s vvvvvvv\n'
+_diffFooter = '\n^^^^^^^ %20s ^^^^^^^\n'
+#                1234567      1234567
 
 
 # internal functions
@@ -126,7 +135,6 @@ def _check(actionArgs):
   homePaths = list(_diffsByHomePath.keys())
   _showDiffsInOrder(homePaths)
   pathIndex = _askUserForDiffIndex(homePaths)
-  print('pathIndex=%d' % pathIndex) # TEMP
   chosenPaths = [homePaths[pathIndex]] if pathIndex != -1 else homePaths
   for homePath in chosenPaths: _letUserHandleDiff(homePath)
   _testReminder = _getTestReminder()
@@ -190,7 +198,27 @@ def _askUserForDiffIndex(homePaths):
 
 # Present a specific diff and let the user respond to it.
 def _letUserHandleDiff(homePath):
-  pass  # TODO
+  base = os.path.basename(homePath)
+  print(_diffHeader % base.center(_basenameWidth))
+  # TODO Improve differentiating between these (in the following for loop).
+  for diffPath in _diffsByHomePath[homePath]:
+    short1, short2 = _shortNames(homePath, diffPath)
+    diff = difflib.unified_diff(
+        _fileLines(homePath), _fileLines(diffPath),
+        fromfile=homePath, tofile=diffPath)
+    for line in diff: print(line, end='')
+  print(_diffFooter % base.center(_basenameWidth))
+  # TODO
+
+def _fileLines(filename):
+  with open(filename, 'r') as f:
+    return f.readlines()
+
+# Expects paths to be different but to have the same basename.
+def _shortNames(path1, path2):
+  uniq1, uniq2 = _getUniqSubpaths(path1, path2)
+  base = os.path.basename(path1)
+  return uniq1 + ':' + base, uniq2 + ':' + base
 
 # Return a string to remind the user what they need to test based
 # on their latest check action.
