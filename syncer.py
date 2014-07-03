@@ -60,7 +60,7 @@ _basenameWidth = 20
 #                                 1         2
 #                1234567 12345678901234567890 1234567
 _horizBreak =   '------------------------------------'
-_diffHeader = '\nvvvvvvv %20s vvvvvvv\n'
+_diffHeader = '\nvvvvvvv %20s vvvvvvv'
 _diffFooter = '\n^^^^^^^ %20s ^^^^^^^\n'
 #                1234567      1234567
 
@@ -185,9 +185,9 @@ def _comparePathsByTime(path1, path2):
 # Present the user with an action prompt and receive their input.
 def _askUserForDiffIndex(homePaths):
   print(_horizBreak)
-  numPaths = len(homePaths)
+  numPaths = min(len(homePaths), 9)
   okChars = ['a'] + list(map(str, range(1, numPaths + 1)))
-  oneFileChoices = '1' if numPaths == 1 else '1-%d' % min(numPaths, 9)
+  oneFileChoices = '1' if numPaths == 1 else '1-%d' % numPaths
   print('Actions: [%s] handle a file; handle [a]ll files.' % oneFileChoices)
   print('What would you like to do?')
   c = _getch()
@@ -200,17 +200,23 @@ def _askUserForDiffIndex(homePaths):
 # Present a specific diff and let the user respond to it.
 def _letUserHandleDiff(homePath):
   base = os.path.basename(homePath)
-  print(_diffHeader % base.center(_basenameWidth))
-  # TODO Improve differentiating between these (in the following for loop).
+  print(_diffHeader % ('start ' + base).center(_basenameWidth))
   for diffPath in _diffsByHomePath[homePath]:
     homeIsOlder = (os.path.getmtime(homePath) < os.path.getmtime(diffPath))
     oldpath, newpath = (homePath, diffPath) if homeIsOlder else (diffPath, homePath)
+
+    print('')
+    print('Diff between:')
+    print('older: ' + oldpath)
+    print('newer: ' + newpath)
+    print('')
+
     short1, short2 = _shortNames(oldpath, newpath)
     diff = difflib.unified_diff(
         _fileLines(oldpath), _fileLines(newpath),
         fromfile=short1, tofile=short2)
     for line in diff: print(line, end='')
-  print(_diffFooter % base.center(_basenameWidth))
+  print(_diffFooter % ('end ' + base).center(_basenameWidth))
   # TODO
 
 def _fileLines(filename):
@@ -334,26 +340,26 @@ def _saveConfig():
 # http://stackoverflow.com/a/21659588
 
 def _find_getch():
+  try:
+    import termios
+  except ImportError:
+    # Non-POSIX. Return msvcrt's (Windows') getch.
+    import msvcrt
+    return msvcrt.getch
+
+  # POSIX system. Create and return a getch that manipulates the tty.
+  import sys, tty
+  def _getch():
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
     try:
-        import termios
-    except ImportError:
-        # Non-POSIX. Return msvcrt's (Windows') getch.
-        import msvcrt
-        return msvcrt.getch
+      tty.setraw(fd)
+      ch = sys.stdin.read(1)
+    finally:
+      termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    return ch
 
-    # POSIX system. Create and return a getch that manipulates the tty.
-    import sys, tty
-    def _getch():
-        fd = sys.stdin.fileno()
-        old_settings = termios.tcgetattr(fd)
-        try:
-            tty.setraw(fd)
-            ch = sys.stdin.read(1)
-        finally:
-            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-        return ch
-
-    return _getch
+  return _getch
 
 _getch = _find_getch()
 
