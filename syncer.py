@@ -50,6 +50,7 @@ _diffsByHomePath = {}
 # For displaying minimally identifying strings for files.
 # {basename: set(homePaths)}
 # File/file pairs read from this, but won't add to it.
+# TODO Check accuracy of the above comment.
 _pathsByBasename = {}
 
 # The following are all designed to be the same length when printed.
