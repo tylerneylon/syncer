@@ -18,6 +18,7 @@ import os
 import os.path
 import pprint
 import re
+import shutil
 import sys
 
 
@@ -63,6 +64,8 @@ _horizBreak =   '------------------------------------'
 _diffHeader = '\nvvvvvvv %20s vvvvvvv'
 _diffFooter = '\n^^^^^^^ %20s ^^^^^^^\n'
 #                1234567      1234567
+
+_changedPaths = []
 
 
 # internal functions
@@ -216,23 +219,29 @@ def _showAndLetUserActOnDiff(homePath):
     homeIsOlder = (os.path.getmtime(homePath) < os.path.getmtime(diffPath))
     oldpath, newpath = (homePath, diffPath) if homeIsOlder else (diffPath, homePath)
 
-    print('')
-    print('Diff between:')
-    print('older: ' + oldpath)
-    print('newer: ' + newpath)
-    print('')
+    diffStrs = []
+    def showAndSave(s, end='\n'):
+      print(s, end=end)
+      diffStrs.append(s + end)
+
+    showAndSave('')
+    showAndSave('Diff between:')
+    showAndSave('older: ' + oldpath)
+    showAndSave('newer: ' + newpath)
+    showAndSave('')
 
     short1, short2 = _shortNames(oldpath, newpath)
     diff = difflib.unified_diff(
         _fileLines(oldpath), _fileLines(newpath),
         fromfile=short1, tofile=short2)
-    for line in diff: print(line, end='')
-    _letUserActOnDiff(newpath, oldpath)
+    for line in diff: showAndSave(line, end='')
+    _letUserActOnDiff(newpath, oldpath, ''.join(diffStrs))
     # TODO
   print(_diffFooter % ('end ' + base).center(_basenameWidth))
   # TODO
 
-def _letUserActOnDiff(newpath, oldpath):
+def _letUserActOnDiff(newpath, oldpath, diff):
+  global _changedPaths
   print(_horizBreak)
   newShort, oldShort = _shortNames(newpath, oldpath)
   print('Actions: [c]opy %s to %s; [w]rite diff file and quit.' % (newShort, oldShort))
@@ -242,8 +251,21 @@ def _letUserActOnDiff(newpath, oldpath):
   while c not in okChars:
     print('Please press one of the keys [' + ''.join(okChars) + ']')
     c = _getch()
-  # TODO HERE
-  
+  if c == 'c':
+    shutil.copy2(newpath, oldpath)  # Copy newpath to oldpath; preserve metadata.
+    _changedPaths.append(oldpath)
+    # TODO Print out and saved recently changed paths.
+  if c == 'w':
+    base = os.path.basename(newpath).replace('.', '_')
+    fname = '%s_diff.txt' % base
+    offset = 1
+    while os.path.isfile(fname):
+      offset += 1  # Purposefully have the next one called 'v2'.
+      fname = '%s_diff_v%d.txt' % (base, offset)
+    with open(fname, 'w') as f:
+      f.write(diff)
+    print('Diff saved in %s' % fname)
+    exit(0)
 
 def _fileLines(filename):
   with open(filename, 'r') as f:
