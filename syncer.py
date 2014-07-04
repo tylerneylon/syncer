@@ -44,7 +44,7 @@ _pairs_header = 'file-file pairs'
 _pairs = []
 
 # For accumulating differences.
-# {home_path: set(copy_paths)}
+# {home_path: set((copy_path, ignore_line3)}
 _diffs_by_home_path = {}
 
 # For displaying minimally identifying strings for files.
@@ -126,7 +126,7 @@ def _check(action_args):
         if home_file_path is None: continue  # An error is already printed by _find_file_path.
         _compare_full_paths(home_file_path, filepath)
   for path1, path2 in _pairs:
-    _compare_full_paths(path1, path2, ignore_line_3=True)
+    _compare_full_paths(path1, path2, ignore_line3=True)
 
   # Turn this on if useful for debugging.
   if False:
@@ -164,7 +164,7 @@ def _show_diffs_in_order(home_paths):
   for home_path in home_paths:
     base = os.path.basename(home_path)
     base_max = max(len(base), base_max)
-    for diff_path in _diffs_by_home_path[home_path]:
+    for diff_path, ignore_line3 in _diffs_by_home_path[home_path]:
       uniq1, uniq2 = _get_uniq_subpaths(home_path, diff_path)
       uniq1_max = max(len(uniq1), uniq1_max)
       uniq2_max = max(len(uniq2), uniq2_max)
@@ -175,7 +175,7 @@ def _show_diffs_in_order(home_paths):
     base = os.path.basename(home_path)
     suffix = '' if len(_paths_by_basename[base]) == 1 else (' in ' + home_path)
     print('\n' + prefix + base + suffix)
-    for diff_path in _diffs_by_home_path[home_path]:
+    for diff_path, ignore_line3 in _diffs_by_home_path[home_path]:
       uniq1, uniq2 = _get_uniq_subpaths(home_path, diff_path)
       cmp_str = _compare_paths_by_time(home_path, diff_path).center(13)
       print(fmt % (uniq1, base, cmp_str, uniq2, base))
@@ -223,7 +223,7 @@ def _ask_user_for_diff_index(home_paths):
 def _show_and_let_user_act_on_diff(home_path):
   base = os.path.basename(home_path)
   print(_diff_header % ('start ' + base).center(_basename_width))
-  for diff_path in _diffs_by_home_path[home_path]:
+  for diff_path, ignore_line3 in _diffs_by_home_path[home_path]:
     home_is_older = (os.path.getmtime(home_path) < os.path.getmtime(diff_path))
     oldpath, newpath = (home_path, diff_path) if home_is_older else (diff_path, home_path)
 
@@ -243,10 +243,10 @@ def _show_and_let_user_act_on_diff(home_path):
         _file_lines(oldpath), _file_lines(newpath),
         fromfile=short1, tofile=short2)
     for line in diff: show_and_save(line, end='')
-    _let_user_act_on_diff(newpath, oldpath, ''.join(diff_strs))
+    _let_user_act_on_diff(newpath, oldpath, ''.join(diff_strs), ignore_line3)
   print(_diff_footer % ('end ' + base).center(_basename_width))
 
-def _let_user_act_on_diff(newpath, oldpath, diff):
+def _let_user_act_on_diff(newpath, oldpath, diff, ignore_line3):
   global _changed_paths
   print(_horiz_break)
   new_short, old_short = _short_names(newpath, oldpath)
@@ -258,7 +258,7 @@ def _let_user_act_on_diff(newpath, oldpath, diff):
     print('Please press one of the keys [' + ''.join(ok_chars) + ']')
     c = _getch()
   if c == 'c':
-    shutil.copy2(newpath, oldpath)  # Copy newpath to oldpath; preserve metadata.
+    _copy_src_to_dst(newpath, oldpath, preserve_line3=ignore_line3)
     _changed_paths.append(oldpath)
     print('Copied')
   if c == 'w':
@@ -275,6 +275,17 @@ def _let_user_act_on_diff(newpath, oldpath, diff):
     _show_test_reminder_if_needed()
     _save_config()
     exit(0)
+
+def _copy_src_to_dst(src, dst, preserve_line3=False):
+  if not preserve_line3:
+    shutil.copy2(src, dst)
+    return
+  # Preserve line 3.
+  src_lines = _file_lines(src)
+  dst_lines = _file_lines(dst)
+  src_lines[2] = dst_lines[2]
+  with open(dst, 'w') as f:
+    f.write(''.join(src_lines))
 
 def _file_lines(filename):
   with open(filename, 'r') as f:
@@ -333,16 +344,16 @@ def _find_file_path(home_info, filepath):
 # Internally compares the given files.
 # The results are stored in _diffs_by_home_path and _paths_by_basename.
 # If one path is a home_path, this expects that as the first argument.
-def _compare_full_paths(path1, path2, ignore_line_3=False):
+def _compare_full_paths(path1, path2, ignore_line3=False):
   # Turn this on if useful for debugging.
   if False: print('_compare_full_paths(%s, %s)' % (path1, path2))
-  if _files_are_same(path1, path2, ignore_line_3): return
-  _diffs_by_home_path.setdefault(path1, set()).add(path2)
+  if _files_are_same(path1, path2, ignore_line3): return
+  _diffs_by_home_path.setdefault(path1, set()).add((path2, ignore_line3))
   base = os.path.basename(path1)
   _paths_by_basename.setdefault(base, set()).add(path1)
 
-def _files_are_same(path1, path2, ignore_line_3=False):
-  if not ignore_line_3: return filecmp.cmp(path1, path2)
+def _files_are_same(path1, path2, ignore_line3=False):
+  if not ignore_line3: return filecmp.cmp(path1, path2)
   # We need to do more work to ignore line 3.
   lines = [None, None]
   paths = [path1, path2]
