@@ -148,6 +148,17 @@ def _showDiffsInOrder(homePaths):
     print('No differences found.')
     exit(0)
   print('Differences found:')
+  # Find column widths.
+  uniq1Max, uniq2Max, baseMax = 0, 0, 0
+  for homePath in homePaths:
+    base = os.path.basename(homePath)
+    baseMax = max(len(base), baseMax)
+    for diffPath in _diffsByHomePath[homePath]:
+      uniq1, uniq2 = _getUniqSubpaths(homePath, diffPath)
+      uniq1Max = max(len(uniq1), uniq1Max)
+      uniq2Max = max(len(uniq2), uniq2Max)
+  # fmt will end up as something like '         %20s: %10s %s %15s: %10s'.
+  fmt = '%7s %%%ds: %%%ds %%s %%%ds: %%%ds' % ('', uniq1Max, baseMax, uniq2Max, baseMax)
   for i, homePath in enumerate(homePaths):
     prefix = '  [%d] ' % (i + 1) if i < 9 else '  [ ] '
     base = os.path.basename(homePath)
@@ -155,8 +166,8 @@ def _showDiffsInOrder(homePaths):
     print('\n' + prefix + base + suffix)
     for diffPath in _diffsByHomePath[homePath]:
       uniq1, uniq2 = _getUniqSubpaths(homePath, diffPath)
-      cmpStr = _comparePathsByTime(homePath, diffPath).center(20)
-      print('          %24s:%10s%s%24s:%10s' % (uniq1, base, cmpStr, uniq2, base))
+      cmpStr = _comparePathsByTime(homePath, diffPath).center(13)
+      print(fmt % (uniq1, base, cmpStr, uniq2, base))
   print('')  # End-of-section newline.
 
 # Removes the common prefix and suffix from the given pair.
@@ -231,6 +242,8 @@ def _letUserActOnDiff(newpath, oldpath):
   while c not in okChars:
     print('Please press one of the keys [' + ''.join(okChars) + ']')
     c = _getch()
+  # TODO HERE
+  
 
 def _fileLines(filename):
   with open(filename, 'r') as f:
