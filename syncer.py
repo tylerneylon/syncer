@@ -226,6 +226,11 @@ def _letUserActOnDiff(newpath, oldpath):
   newShort, oldShort = _shortNames(newpath, oldpath)
   print('Actions: [c]opy %s to %s; [w]rite diff file and quit.' % (newShort, oldShort))
   print('What would you like to do?')
+  okChars = ['c', 'w']
+  c = _getch()
+  while c not in okChars:
+    print('Please press one of the keys [' + ''.join(okChars) + ']')
+    c = _getch()
 
 def _fileLines(filename):
   with open(filename, 'r') as f:
