@@ -137,7 +137,7 @@ def _check(actionArgs):
   _showDiffsInOrder(homePaths)
   pathIndex = _askUserForDiffIndex(homePaths)
   chosenPaths = [homePaths[pathIndex]] if pathIndex != -1 else homePaths
-  for homePath in chosenPaths: _letUserHandleDiff(homePath)
+  for homePath in chosenPaths: _showAndLetUserActOnDiff(homePath)
   _testReminder = _getTestReminder()
 
 # Shows something like the following for each given homePath:
@@ -198,7 +198,7 @@ def _askUserForDiffIndex(homePaths):
   return okChars.index(c) - 1
 
 # Present a specific diff and let the user respond to it.
-def _letUserHandleDiff(homePath):
+def _showAndLetUserActOnDiff(homePath):
   base = os.path.basename(homePath)
   print(_diffHeader % ('start ' + base).center(_basenameWidth))
   for diffPath in _diffsByHomePath[homePath]:
@@ -216,8 +216,16 @@ def _letUserHandleDiff(homePath):
         _fileLines(oldpath), _fileLines(newpath),
         fromfile=short1, tofile=short2)
     for line in diff: print(line, end='')
+    _letUserActOnDiff(newpath, oldpath)
+    # TODO
   print(_diffFooter % ('end ' + base).center(_basenameWidth))
   # TODO
+
+def _letUserActOnDiff(newpath, oldpath):
+  print(_horizBreak)
+  newShort, oldShort = _shortNames(newpath, oldpath)
+  print('Actions: [c]opy %s to %s; [w]rite diff file and quit.' % (newShort, oldShort))
+  print('What would you like to do?')
 
 def _fileLines(filename):
   with open(filename, 'r') as f:
