@@ -365,6 +365,7 @@ def _find_getch():
       ch = sys.stdin.read(1)
     finally:
       termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    if len(ch) == 1 and ord(ch) == 3: raise KeyboardInterrupt
     return ch
 
   return _getch
