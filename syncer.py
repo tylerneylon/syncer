@@ -22,7 +22,6 @@ import shutil
 import sys
 
 
-
 # globals
 # =======
 
@@ -65,6 +64,8 @@ _diffHeader = '\nvvvvvvv %20s vvvvvvv'
 _diffFooter = '\n^^^^^^^ %20s ^^^^^^^\n'
 #                1234567      1234567
 
+# TODO Update old code that refers to testReminder.
+_changedPathsHeader = 'recently changed paths'
 _changedPaths = []
 
 
@@ -265,6 +266,7 @@ def _letUserActOnDiff(newpath, oldpath, diff):
     with open(fname, 'w') as f:
       f.write(diff)
     print('Diff saved in %s' % fname)
+    _saveConfig()
     exit(0)
 
 def _fileLines(filename):
@@ -353,8 +355,7 @@ def _linesOfFile(path):
   return lines
 
 def _loadConfig():
-  # TODO Load _testReminder
-  global _repos, _pairs
+  global _repos, _pairs, _changedPaths
   if not os.path.isfile(_configPath): return  # First run; empty lists are ok.
   addingTo = None
   with open(_configPath, 'r') as f:
@@ -364,14 +365,17 @@ def _loadConfig():
         addingTo = _repos
       elif line.startswith(_pairs_header):
         addingTo = _pairs
+      elif line.startswith(_changedPathsHeader):
+        addingTo = _changedPaths
       elif addingTo is not None:
         addingTo.append(line.strip().split(' '))
+  # Undo the split(' ') in the case of _changedPaths.
+  _changedPaths = [' '.join(path) for path in _changedPaths]
 
 # Save the current set of tracked files; while running, this
 # data is kept in _repos and _pairs.
 def _saveConfig():
-  # TODO Save _testReminder
-  global _repos, _pairs
+  global _repos, _pairs, _changedPaths
   with open(_configPath, 'w') as f:
     if _repos:
       f.write('%s:\n' % _repos_header)
@@ -379,6 +383,9 @@ def _saveConfig():
     if _pairs:
       f.write('%s:\n' % _pairs_header)
       for pair in _pairs: f.write('  %s %s\n' % tuple(pair))
+    if _changedPaths:
+      f.write('%s:\n' % _changedPathsHeader)
+      for path in _changedPaths: f.write('  %s\n' % path)
 
 
 # input functions
