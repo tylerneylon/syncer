@@ -139,6 +139,8 @@ def _check(actionArgs):
   homePaths = list(_diffsByHomePath.keys())
   _showDiffsInOrder(homePaths)
   pathIndex = _askUserForDiffIndex(homePaths)
+  # If we get this far, then we're committed to the check and can reset _changedPaths.
+  _changedPaths = []
   chosenPaths = [homePaths[pathIndex]] if pathIndex != -1 else homePaths
   for homePath in chosenPaths: _showAndLetUserActOnDiff(homePath)
   if _changedPaths:
