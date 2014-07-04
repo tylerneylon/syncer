@@ -143,6 +143,10 @@ def _check(actionArgs):
   _changedPaths = []
   chosenPaths = [homePaths[pathIndex]] if pathIndex != -1 else homePaths
   for homePath in chosenPaths: _showAndLetUserActOnDiff(homePath)
+  _showTestReminderIfNeeded()
+
+def _showTestReminderIfNeeded():
+  global _changedPaths
   if _changedPaths:
     print('The following paths have been changed; testing is recommended!')
     for path in _changedPaths: print(path)
@@ -240,9 +244,7 @@ def _showAndLetUserActOnDiff(homePath):
         fromfile=short1, tofile=short2)
     for line in diff: showAndSave(line, end='')
     _letUserActOnDiff(newpath, oldpath, ''.join(diffStrs))
-    # TODO
   print(_diffFooter % ('end ' + base).center(_basenameWidth))
-  # TODO
 
 def _letUserActOnDiff(newpath, oldpath, diff):
   global _changedPaths
@@ -258,7 +260,7 @@ def _letUserActOnDiff(newpath, oldpath, diff):
   if c == 'c':
     shutil.copy2(newpath, oldpath)  # Copy newpath to oldpath; preserve metadata.
     _changedPaths.append(oldpath)
-    # TODO Print out and saved recently changed paths.
+    print('Copied')
   if c == 'w':
     base = os.path.basename(newpath).replace('.', '_')
     fname = '%s_diff.txt' % base
@@ -269,6 +271,8 @@ def _letUserActOnDiff(newpath, oldpath, diff):
     with open(fname, 'w') as f:
       f.write(diff)
     print('Diff saved in %s' % fname)
+    if _changedPaths: print('')  # Visually distinguish the test reminder below.
+    _showTestReminderIfNeeded()
     _saveConfig()
     exit(0)
 
@@ -281,11 +285,6 @@ def _shortNames(path1, path2):
   uniq1, uniq2 = _getUniqSubpaths(path1, path2)
   base = os.path.basename(path1)
   return uniq1 + ':' + base, uniq2 + ':' + base
-
-# Return a string to remind the user what they need to test based
-# on their latest check action.
-def _getTestReminder():
-  return ''  # TODO
 
 # Checks for a recognized repo name on line 3.
 # Returns [homeDir, homeSubdir] if found; homeSubdir may be None;
