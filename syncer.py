@@ -64,7 +64,6 @@ _diffHeader = '\nvvvvvvv %20s vvvvvvv'
 _diffFooter = '\n^^^^^^^ %20s ^^^^^^^\n'
 #                1234567      1234567
 
-# TODO Update old code that refers to testReminder.
 _changedPathsHeader = 'recently changed paths'
 _changedPaths = []
 
@@ -111,7 +110,7 @@ def _track(actionArgs):
     print('Started tracking the files:\n%s\n%s' % tuple(_pairs[-1]))
 
 def _check(actionArgs):
-  global _repos, _pairs, _testReminder
+  global _repos, _pairs, _changedPaths
   if len(actionArgs) > 0:
     print('Unexpected arguments after "check": %s' % ' '.join(actionArgs))
     exit(2)
@@ -142,7 +141,9 @@ def _check(actionArgs):
   pathIndex = _askUserForDiffIndex(homePaths)
   chosenPaths = [homePaths[pathIndex]] if pathIndex != -1 else homePaths
   for homePath in chosenPaths: _showAndLetUserActOnDiff(homePath)
-  _testReminder = _getTestReminder()
+  if _changedPaths:
+    print('The following paths have been changed; testing is recommended!')
+    for path in _changedPaths: print(path)
 
 # Shows something like the following for each given homePath:
 #   [1] <basename> [in repo name if not unique]
