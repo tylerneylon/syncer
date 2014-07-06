@@ -210,12 +210,10 @@ def _ask_user_for_diff_index(home_paths):
   num_paths = min(len(home_paths), 9)
   ok_chars = ['a'] + list(map(str, range(1, num_paths + 1)))
   one_file_choices = '1' if num_paths == 1 else '1-%d' % num_paths
-  print('Actions: [%s] handle a file; handle [a]ll files.' % one_file_choices)
+  fmt = 'Actions: [%s] handle a file; handle [a]ll files; [q]uit.'
+  print(fmt % one_file_choices)
   print('What would you like to do?')
-  c = _getch()
-  while c not in ok_chars:
-    print('Please press one of the keys [' + ''.join(ok_chars) + ']')
-    c = _getch()
+  c = _wait_for_key_in_list(ok_chars)
   # We return either a 0-based index of the path, or -1 for the 'all' choice.
   return ok_chars.index(c) - 1
 
@@ -250,13 +248,10 @@ def _let_user_act_on_diff(newpath, oldpath, diff, ignore_line3):
   global _changed_paths
   print(_horiz_break)
   new_short, old_short = _short_names(newpath, oldpath)
-  print('Actions: [c]opy %s to %s; [w]rite diff file and quit.' % (new_short, old_short))
+  fmt = 'Actions: [c]opy %s to %s; [w]rite diff file and quit; [q]uit.'
+  print(fmt % (new_short, old_short))
   print('What would you like to do?')
-  ok_chars = ['c', 'w']
-  c = _getch()
-  while c not in ok_chars:
-    print('Please press one of the keys [' + ''.join(ok_chars) + ']')
-    c = _getch()
+  c = _wait_for_key_in_list(['c', 'w'])
   if c == 'c':
     _copy_src_to_dst(newpath, oldpath, preserve_line3=ignore_line3)
     _changed_paths.append(oldpath)
@@ -275,6 +270,20 @@ def _let_user_act_on_diff(newpath, oldpath, diff, ignore_line3):
     _show_test_reminder_if_needed()
     _save_config()
     exit(0)
+
+# Wait for a key in the given set.
+# 'q' is added if not present, and acted on immmediately as a quit option.
+# Otherwise the selected key is returned.
+def _wait_for_key_in_list(ok_chars):
+  if 'q' not in ok_chars: ok_chars.append('q')
+  c = _getch()
+  while c not in ok_chars:
+    print('Please press one of the keys [' + ''.join(ok_chars) + ']')
+    c = _getch()
+  if c == 'q':
+    _save_config()
+    exit(0)
+  return c
 
 def _copy_src_to_dst(src, dst, preserve_line3=False):
   if not preserve_line3:
