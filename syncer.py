@@ -54,20 +54,18 @@ _diffs_by_home_path = {}
 
 # For displaying minimally identifying strings for files.
 # {basename: set(home_paths)}
-# File/file pairs read from this, but won't add to it.
-# TODO Check accuracy of the above comment.
 _paths_by_basename = {}
 
 # The following are all designed to be the same length when printed.
 # They'll be nicely aligned as long as the basename is <= 20 chars.
 
 _basename_width = 20
-#                                 1         2
-#                1234567 12345678901234567890 1234567
+#                                  1         2
+#                 1234567 12345678901234567890 1234567
 _horiz_break =   '------------------------------------'
 _diff_header = '\nvvvvvvv %20s vvvvvvv'
 _diff_footer = '\n^^^^^^^ %20s ^^^^^^^\n'
-#                1234567      1234567
+#                 1234567      1234567
 
 _changed_paths_header = 'recently changed paths'
 _changed_paths = []
@@ -364,7 +362,7 @@ def _find_file_path(home_info, filepath):
     candidate = home_file_path
   return candidate
 
-# Internally compares the given files.
+# Internally compares the given files; "internally" means we don't show the user yet.
 # The results are stored in _diffs_by_home_path and _paths_by_basename.
 # If one path is a home_path, this expects that as the first argument.
 def _compare_full_paths(path1, path2, ignore_line3=False):
