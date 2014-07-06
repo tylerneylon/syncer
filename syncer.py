@@ -109,8 +109,13 @@ def _track(action_args):
     _repos.append([action_args[0], os.getcwd()])
     print('Started tracking the repo and dir:\n%s\n%s' % tuple(_repos[-1]))
   if len(action_args) == 2:  # Track a file/file pair.
-    # TODO Check that files exist and convert to absolute paths.
-    _pairs.append(action_args)
+    for path in action_args:
+      if not os.path.isfile(path):
+        print('Error: %s is not a file.' % path)
+        exit(1)
+    # Make sure we have absolute paths saved.
+    paths = [os.path.abspath(path) for path in action_args]
+    _pairs.append(paths)
     print('Started tracking the files:\n%s\n%s' % tuple(_pairs[-1]))
 
 def _check(action_args):
@@ -425,7 +430,7 @@ def _save_config():
 # input functions
 # ===============
 
-# This implementation is from stackoverflow, here:
+# This implementation is a modification of one from stackoverflow, here:
 # http://stackoverflow.com/a/21659588
 
 def _find_getch():
