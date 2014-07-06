@@ -1,11 +1,18 @@
 #!/usr/local/bin/python3
 #
-# TODO Intro comments here.
+# syncer helps manage evolving code dependencies.
+#
+"""
+  syncer track <repo-name>      # Track the current dir with the given repo name (a name may be, e.g., a github url).
+  syncer track <file1> <file2>  # Track the given file pair.
+  syncer check                  # Check all known repo-name/dir and file/file pairs for differences.
+  syncer remind                 # Print all paths affected by last run of "syncer check"; useful for testing.
+"""
+#
+# Metadata is stored in the human-friendly file ~/.syncer
+# More details are in readme.md.
 #
 
-# Future TODO Items:
-#  * In _show_diffs_in_order, minimize the column widths based on string sizes.
-#
 
 # imports
 # =======
@@ -74,13 +81,7 @@ _changed_paths = []
 def _handle_args(args):
   global _verbose
   my_name = sys.argv[0].split('/')[-1]
-  usage = """
-          {name} track <repo-name>      # Track the current dir with the given repo name (a name may be, e.g., a github url).
-          {name} track <file1> <file2>  # Track the given file pair.
-          {name} check                  # Check all known repo-name/dir and file/file pairs for differences.
-          {name} remind                 # Print all paths affected by last run of "{name} check"; useful for testing."""
-  usage = usage.format(name=my_name)
-  parser = OptionParser(usage=usage)
+  parser = OptionParser(usage=__doc__)
   (options, args) = parser.parse_args(args)
   if len(args) <= 1:
     parser.print_help()
