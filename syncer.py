@@ -75,10 +75,11 @@ def _handle_args(args):
   global _verbose
   my_name = sys.argv[0].split('/')[-1]
   usage = """
-             %s track <repo-name>      # Track the current dir with the given repo name (a name may be, e.g., a github url).
-             %s track <file1> <file2>  # Track the given file pair.
-             %s check                  # Check all known repo-name/dir and file/file pairs for differences."""
-  usage = usage % (my_name, my_name, my_name)
+          {name} track <repo-name>      # Track the current dir with the given repo name (a name may be, e.g., a github url).
+          {name} track <file1> <file2>  # Track the given file pair.
+          {name} check                  # Check all known repo-name/dir and file/file pairs for differences.
+          {name} remind                 # Print all paths affected by last run of "{name} check"; useful for testing."""
+  usage = usage.format(name=my_name)
   parser = OptionParser(usage=usage)
   (options, args) = parser.parse_args(args)
   if len(args) <= 1:
@@ -91,10 +92,17 @@ def _handle_args(args):
   elif action == 'check':
     _load_config()
     _check(args[2:])
+  elif action == 'remind':
+    _load_config()
+    _remind(args[2:])
   else:
     print('Unrecognized action: %s.' % action)
     parser.print_help()
     exit(2)
+
+
+# primary action functions
+# ========================
 
 def _track(action_args):
   global _repos, _pairs
@@ -127,15 +135,7 @@ def _check(action_args):
         _compare_full_paths(home_file_path, filepath)
   for path1, path2 in _pairs:
     _compare_full_paths(path1, path2, ignore_line3=True)
-
-  # Turn this on if useful for debugging.
-  if False:
-    print('Comparisons are done in _check.')
-    print('_diffs_by_home_path:')
-    pprint.pprint(_diffs_by_home_path)
-    print('_paths_by_basename:')
-    pprint.pprint(_paths_by_basename)
-
+  if False: _debug_show_known_diffs()  # Turn this on if useful for debugging.
   home_paths = list(_diffs_by_home_path.keys())
   _show_diffs_in_order(home_paths)
   path_index = _ask_user_for_diff_index(home_paths)
@@ -144,6 +144,22 @@ def _check(action_args):
   chosen_paths = [home_paths[path_index]] if path_index != -1 else home_paths
   for home_path in chosen_paths: _show_and_let_user_act_on_diff(home_path)
   _show_test_reminder_if_needed()
+
+def _remind(action_args):
+  global _changed_paths
+  if len(action_args) > 0:
+    print('Warning: ignoring the extra arguments %s' % ' '.join(action_args))
+  if _changed_paths:
+    _show_test_reminder_if_needed()
+  else:
+    print('No files changed during last run of "syncer check."')
+
+def _debug_show_known_diffs():
+  print('Comparisons are done in _check.')
+  print('_diffs_by_home_path:')
+  pprint.pprint(_diffs_by_home_path)
+  print('_paths_by_basename:')
+  pprint.pprint(_paths_by_basename)
 
 def _show_test_reminder_if_needed():
   global _changed_paths
