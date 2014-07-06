@@ -34,8 +34,6 @@ import sys
 
 # Internal names start with an underscore.
 
-_verbose = False  # TODO Remove if unused.
-
 _config_path = os.path.expanduser('~/.syncer')
 
 # The string used in .syncer to denote name-path pairs.
@@ -79,7 +77,6 @@ _changed_paths = []
 # ==================
 
 def _handle_args(args):
-  global _verbose
   my_name = sys.argv[0].split('/')[-1]
   parser = OptionParser(usage=__doc__)
   (options, args) = parser.parse_args(args)
