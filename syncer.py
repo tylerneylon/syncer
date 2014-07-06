@@ -115,6 +115,9 @@ def _track(action_args):
         exit(1)
     # Make sure we have absolute paths saved.
     paths = [os.path.abspath(path) for path in action_args]
+    if os.path.basename(paths[0]) != os.path.basename(paths[1]):
+      print('Error: file names must match to track them together.')
+      exit(1)
     _pairs.append(paths)
     print('Started tracking the files:\n%s\n%s' % tuple(_pairs[-1]))
 
@@ -199,7 +202,7 @@ def _show_diffs_in_order(home_paths):
   print('')  # End-of-section newline.
 
 # Removes the common prefix and suffix from the given pair.
-# Expects the paths to be unequal.
+# Expects the paths to be unequal, but the file names to match.
 # In other words, given strings of the form ABC, ADC, this returns B, D.
 def _get_uniq_subpaths(path1, path2):
   dirs1 = path1.split(os.sep)
