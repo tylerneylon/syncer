@@ -177,6 +177,7 @@ def _show_test_reminder_if_needed():
 def _show_diffs_in_order(home_paths):
   if len(home_paths) == 0:
     print('No differences found.')
+    print('All good!')
     exit(0)
   print('Differences found:')
   # Find column widths.
