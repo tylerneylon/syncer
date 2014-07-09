@@ -240,6 +240,7 @@ def _ask_user_for_diff_index(home_paths):
 
 # Present a specific diff and let the user respond to it.
 def _show_and_let_user_act_on_diff(home_path):
+  no_newline_str = ' ^^^^^^^ (no ending newline)'
   base = os.path.basename(home_path)
   print(_diff_header % ('start ' + base).center(_basename_width))
   for diff_path, ignore_line3 in _diffs_by_home_path[home_path]:
@@ -261,7 +262,9 @@ def _show_and_let_user_act_on_diff(home_path):
     diff = difflib.unified_diff(
         _file_lines(oldpath), _file_lines(newpath),
         fromfile=short1, tofile=short2)
-    for line in diff: show_and_save(line, end='')
+    for line in diff:
+      end = '' if line.endswith('\n') else ('\n' + no_newline_str + '\n')
+      show_and_save(line, end=end)
     _let_user_act_on_diff(newpath, oldpath, ''.join(diff_strs), ignore_line3)
   print(_diff_footer % ('end ' + base).center(_basename_width))
 
