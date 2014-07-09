@@ -206,15 +206,16 @@ def _show_diffs_in_order(home_paths):
 # Expects the paths to be unequal, but the file names to match.
 # In other words, given strings of the form ABC, ADC, this returns B, D.
 def _get_uniq_subpaths(path1, path2):
-  dirs1 = path1.split(os.sep)
-  dirs2 = path2.split(os.sep)
-  pre_idx = 0
-  post_idx = -1
-  while dirs1[pre_idx]  == dirs2[pre_idx] : pre_idx += 1
-  while dirs1[post_idx] == dirs2[post_idx]: post_idx -= 1
-  uniq1 = os.path.join(*dirs1[pre_idx:post_idx + 1])
-  uniq2 = os.path.join(*dirs2[pre_idx:post_idx + 1])
-  return uniq1, uniq2
+  dirs = [path1.split(os.sep), path2.split(os.sep)]
+  pre_idx, post_idx = 0, -1
+  while dirs[0][pre_idx]  == dirs[1][pre_idx] : pre_idx  += 1
+  while dirs[0][post_idx] == dirs[1][post_idx]: post_idx -= 1
+  uniqs = [d[pre_idx:post_idx + 1] for d in dirs]
+  for i in range(len(uniqs)):
+    # Handle the special case that paths are of the form [ABC, AC].
+    if len(uniqs[i]) == 0: uniqs[i] = dirs[i][pre_idx:post_idx + 2]
+    uniqs[i] = os.path.join(*uniqs[i])
+  return tuple(uniqs)
 
 # Returns a comparison result string based on the files' timestamps.
 # Return values are '<-newer  ', '  newer->' or '!='.
