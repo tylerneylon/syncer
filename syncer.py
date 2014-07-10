@@ -33,6 +33,7 @@ import sys
 # =======
 
 # Internal names start with an underscore.
+# Some globals are defined inline close to where they're used.
 
 _config_path = os.path.expanduser('~/.syncer')
 
@@ -336,6 +337,18 @@ def _short_names(path1, path2):
   base = os.path.basename(path1)
   return uniq1 + ':' + base, uniq2 + ':' + base
 
+# A regex that matches line 3 and extracts the home info.
+# This is lazily setup from _get_homeinfo_regex.
+_homeinfo_regex = None
+
+def _get_homeinfo_regex():
+  global _homeinfo_regex
+  if _homeinfo_regex is None:
+    or_list = '|'.join([name for name, root in _repos])
+    regex_str = r'(%s)(?: in (\S+))?$' % or_list
+    _homeinfo_regex = re.compile(regex_str)
+  return _homeinfo_regex
+
 # Checks for a recognized repo name on line 3.
 # Returns [home_dir, home_subdir] if found; home_subdir may be None;
 # return None if no repo name is recognized.
@@ -349,11 +362,10 @@ def _check_for_home_info(filepath):
     start_lines = file_start.split('\n')
     if len(start_lines) < 3: return None
     line3 = start_lines[2]
-    for name, root in _repos:
-      regex = r'(%s)(?: in (\S+))?$' % name
-      m = re.search(regex, line3)
-      if m is None: continue
-      return [m.group(1), m.group(2)]
+    regex = _get_homeinfo_regex()
+    m = regex.search(line3)
+    if m is None: return None
+    return [m.group(1), m.group(2)]
 
 # A cache to avoid redundant os.walk calls.
 # _subpaths_of_root[root][base] = [path]
