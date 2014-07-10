@@ -273,14 +273,19 @@ def _let_user_act_on_diff(newpath, oldpath, diff, ignore_line3):
   global _changed_paths
   print(_horiz_break)
   new_short, old_short = _short_names(newpath, oldpath)
-  fmt = 'Actions: [c]opy %s to %s; [w]rite diff file and quit; [q]uit.'
-  print(fmt % (new_short, old_short))
+  fmt =  'Actions: [c]opy %s to %s; [r]everse copy %s to %s; '
+  fmt += '[w]rite diff file and quit; [q]uit.'
+  print(fmt % (new_short, old_short, old_short, new_short))
   print('What would you like to do?')
-  c = _wait_for_key_in_list(['c', 'w'])
+  c = _wait_for_key_in_list(['c', 'r', 'w'])
   if c == 'c':
     _copy_src_to_dst(newpath, oldpath, preserve_line3=ignore_line3)
     _changed_paths.append(oldpath)
     print('Copied')
+  if c == 'r':
+    _copy_src_to_dst(oldpath, newpath, preserve_line3=ignore_line3)
+    _changed_paths.append(newpath)
+    print('Reverse copied')
   if c == 'w':
     base = os.path.basename(newpath).replace('.', '_')
     fname = '%s_diff.txt' % base
@@ -345,35 +350,59 @@ def _check_for_home_info(filepath):
     if len(start_lines) < 3: return None
     line3 = start_lines[2]
     for name, root in _repos:
-      regex = r'(%s)(?: in (\S+))?' % name
+      regex = r'(%s)(?: in (\S+))?$' % name
       m = re.search(regex, line3)
       if m is None: continue
       return [m.group(1), m.group(2)]
+
+# A cache to avoid redundant os.walk calls.
+# _subpaths_of_root[root][base] = [path]
+# This is used in _get_all_subpaths.
+_subpaths_of_root = {}
+
+def _get_all_subpaths(root):
+  global _subpaths_of_root
+  if root in _subpaths_of_root: return _subpaths_of_root[root]
+  subpaths = {}
+  for path, dirs, files in os.walk(root):
+    for f in files: subpaths.setdefault(f, []).append(path + os.sep + f)
+  _subpaths_of_root[root] = subpaths
+  return subpaths
+
+# _known_home_paths[(home_dir, home_subdir, base)] = home_path
+# This is used in _find_file_path.
+_known_home_paths = {}
 
 # Takes a [home_dir, home_subdir] pair as returned from _check_for_home_info,
 # and resolves a file path for the home version. Emits a warning if
 # multiple files match the given home_info.
 def _find_file_path(home_info, filepath):
-  global _repos
+  global _repos, _known_home_paths
   for name, root in _repos:
-    if home_info[0] == name: home_root = root
+    if home_info[0] == name:
+      home_root = root
+      break
   base = os.path.basename(filepath)
+  key = (home_info[0], home_info[1], base)
+  if key in _known_home_paths: return _known_home_paths[key]
   if home_info[1]:
     home_path = os.path.join(home_root, home_info[1], base)
     if not os.path.isfile(home_path):
       print('Error: %s pointed to home version %s, but it doesn\'t exist.' % (filepath, home_path))
       return None
+    _known_home_paths[key] = home_path
     return home_path
   # Handle the case that no subdir was given; we must walk the dir to find it.
-  candidate = None
-  for path, dirs, files in os.walk(home_root):
-    if base not in files: continue
-    home_file_path = os.path.join(path, base)
-    if candidate:
-      fmt = 'Warning: found multiple possible home paths for %s. First two matches are:\n%s\n%s'
-      print(fmt % (filepath, candidate, home_file_path))
-    candidate = home_file_path
-  return candidate
+  subpaths = _get_all_subpaths(home_root)
+  if base not in subpaths:
+    print('Error: no home path found for %s' % filepath)
+    return None
+  basepaths = subpaths[base]
+  if len(basepaths) > 1:
+    print('Warning: found multiple home paths for %s, listed below:' % filepath)
+    for path in basepaths: print('    %s' % path)
+  _known_home_paths[key] = basepaths[0]
+  return basepaths[0]
 
 # Internally compares the given files; "internally" means we don't show the user yet.
 # The results are stored in _diffs_by_home_path and _paths_by_basename.
