@@ -7,6 +7,7 @@
   syncer track <file1> <file2>  # Track the given file pair.
   syncer check                  # Check all known repo-name/dir and file/file pairs for differences.
   syncer remind                 # Print all paths affected by last run of "syncer check"; useful for testing.
+  syncer list                   # Print all file pairs checked for equality.
 """
 #
 # Metadata is stored in the human-friendly file ~/.syncer
@@ -92,6 +93,9 @@ def _handle_args(args):
   elif action == 'remind':
     _load_config()
     _remind(args[2:])
+  elif action == 'list':
+    _load_config()
+    _list(args[2:])
   else:
     print('Unrecognized action: %s.' % action)
     parser.print_help()
@@ -128,16 +132,9 @@ def _check(action_args):
     print('Unexpected arguments after "check": %s' % ' '.join(action_args))
     exit(2)
   print('Checking for differences.')
-  for name, root in _repos:
-    for path, dirs, files in os.walk(root):
-      for filename in files:
-        filepath = os.path.join(path, filename)
-        home_info = _check_for_home_info(filepath)
-        if home_info is None:    continue
-        if home_info[0] == name: continue
-        home_file_path = _find_file_path(home_info, filepath)
-        if home_file_path is None: continue  # An error is already printed by _find_file_path.
-        _compare_full_paths(home_file_path, filepath)
+  repo_file_pairs = _find_repo_file_pairs()
+  for home_file_path, copy_path in repo_file_pairs:
+    _compare_full_paths(home_file_path, copy_path)
   for path1, path2 in _pairs:
     _compare_full_paths(path1, path2, ignore_line3=True)
   if False: _debug_show_known_diffs()  # Turn this on if useful for debugging.
@@ -158,6 +155,29 @@ def _remind(action_args):
     _show_test_reminder_if_needed()
   else:
     print('No files changed during last run of "syncer check."')
+
+def _list(action_args):
+  global _pairs
+  if len(action_args) > 0:
+    print('Warning: ignoring the extra arguments %s' % ' '.join(action_args))
+  repo_file_pairs = _find_repo_file_pairs()
+  for path1, path2 in repo_file_pairs: print(path1, path2)
+  for path1, path2 in _pairs:          print(path1, path2)
+
+def _find_repo_file_pairs():
+  global _repos
+  repo_file_pairs = []
+  for name, root in _repos:
+    for path, dirs, files in os.walk(root):
+      for filename in files:
+        filepath = os.path.join(path, filename)
+        home_info = _check_for_home_info(filepath)
+        if home_info is None:    continue
+        if home_info[0] == name: continue
+        home_file_path = _find_file_path(home_info, filepath)
+        if home_file_path is None: continue  # An error is already printed by _find_file_path.
+        repo_file_pairs.append([home_file_path, filepath])
+  return repo_file_pairs
 
 def _debug_show_known_diffs():
   print('Comparisons are done in _check.')
