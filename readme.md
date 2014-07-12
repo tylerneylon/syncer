@@ -29,6 +29,7 @@ syncer track <repo-name>      # Track the current dir with the given repo name (
 syncer track <file1> <file2>  # Track the given file pair.
 syncer check                  # Check all known repo-name/dir and file/file pairs for differences.
 syncer remind                 # Print all paths affected by last run of "syncer check".
+syncer list                   # Print all file pairs checked for equality.
 ```
 
 Let's see an example.
@@ -68,7 +69,7 @@ Once you're done with your current `photoapp` work, you can run
 a check with `syncer` to identify any copied files that are no longer
 identical, like so:
 
-    syncer check
+    $ syncer check
 
 This begins an interactive process which will notice that the
 copies of `my_png_reader.h` are not identical, and notice which one
@@ -84,7 +85,20 @@ needs to be done to verify that the changes are good. You can run
 the following command to remind you of every file that was changed
 by the last run of `syncer`:
 
-    syncer remind
+    $ syncer remind
+
+### -- `list` action
+
+This action will list all file pairs compared by `syncer`, providing two
+absolute paths per line.
+The original file path (the version located in that file's primary repo)
+is listed first, followed by the copy's path. Custom file pairs, described
+below, don't have a designation between original/copy, so theyr'e listed
+in the order they were given to `syncer`. Sample uses of this action:
+
+    $ syncer list
+    $ syncer list | wc           # Get a count of file comparisons.
+    $ syncer list | sort | less  # Inspect file pairs.
 
 ### -- custom file pairs
 
