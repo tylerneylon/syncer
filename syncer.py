@@ -111,6 +111,12 @@ def _track(action_args):
     print('Expected one or two parameters as items to track.')
     exit(2)
   if len(action_args) == 1:  # Track a repo/path pair.
+    # Make sure the repo name is new.
+    repo_name = action_args[0]
+    repo_map  = dict(_repos)
+    if repo_name in repo_map:
+      print('Error: repo %s is already tracked at %s' % (repo_name, repo_map[repo_name]))
+      exit(1)
     _repos.append([action_args[0], os.getcwd()])
     print('Started tracking the repo and dir:\n%s\n%s' % tuple(_repos[-1]))
   if len(action_args) == 2:  # Track a file/file pair.
