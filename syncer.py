@@ -300,11 +300,11 @@ def _let_user_act_on_diff(newpath, oldpath, diff, ignore_line3):
   global _changed_paths
   print(_horiz_break)
   new_short, old_short = _short_names(newpath, oldpath)
-  fmt =  'Actions: [c]opy %s to %s; [r]everse copy %s to %s; '
-  fmt += '[w]rite diff file and quit; [q]uit.'
+  fmt =  'Actions: [c]opy %s to %s; [r]everse copy %s to %s;\n'
+  fmt += '  [s]kip this file; [w]rite diff file and quit; [q]uit.'
   print(fmt % (new_short, old_short, old_short, new_short))
   print('What would you like to do?')
-  c = _wait_for_key_in_list(['c', 'r', 'w'])
+  c = _wait_for_key_in_list(list('crws'))
   if c == 'c':
     _copy_src_to_dst(newpath, oldpath, preserve_line3=ignore_line3)
     _changed_paths.append(oldpath)
@@ -327,6 +327,8 @@ def _let_user_act_on_diff(newpath, oldpath, diff, ignore_line3):
     _show_test_reminder_if_needed()
     _save_config()
     exit(0)
+  if c == 's':
+    print('Skipped!')
 
 # Wait for a key in the given set.
 # 'q' is added if not present, and acted on immmediately as a quit option.
