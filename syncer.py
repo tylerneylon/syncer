@@ -300,7 +300,9 @@ def _let_user_act_on_diff(newpath, oldpath, diff, ignore_line3):
   global _changed_paths
   print(_horiz_break)
   new_short, old_short = _short_names(newpath, oldpath)
-  fmt =  'Actions: [c]opy %s to %s; [r]everse copy %s to %s;\n'
+  fmt  = 'Actions:\n'
+  fmt += '  [c]opy %s to %s;\n'
+  fmt += '  [r]everse copy %s to %s;\n'
   fmt += '  [s]kip this file; [w]rite diff file and quit; [q]uit.'
   print(fmt % (new_short, old_short, old_short, new_short))
   print('What would you like to do?')
