@@ -137,7 +137,7 @@ installed at `/usr/local/bin/python3`. If this isn't
 true, edit the first line of `syncer.py`.
 
     $ git clone https://github.com/tylerneylon/syncer.git
-    $ sudo ln -s $(cd fh; pwd)/syncer.py /usr/local/bin/syncer
+    $ sudo ln -s $(cd syncer; pwd)/syncer.py /usr/local/bin/syncer
 
 ## Alternatives
 
