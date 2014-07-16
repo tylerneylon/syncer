@@ -66,7 +66,7 @@ _basename_width = 20
 #                 1234567 12345678901234567890 1234567
 _horiz_break =   '------------------------------------'
 _diff_header = '\nvvvvvvv %20s vvvvvvv'
-_diff_footer = '\n^^^^^^^ %20s ^^^^^^^\n'
+_diff_footer = '\n^^^^^^^ %20s ^^^^^^^'
 #                 1234567      1234567
 
 _changed_paths_header = 'recently changed paths'
@@ -75,6 +75,15 @@ _changed_paths = []
 
 # internal functions
 # ==================
+
+def _init():
+  global _horiz_break, _diff_header, _diff_footer
+  rows, columns = os.popen('stty size', 'r').read().split()
+  pad_len = min(int(columns) - len(_horiz_break) - 2, 100)  # 100 is the max separator width.
+  if pad_len <= 0: return
+  _horiz_break += '-' * pad_len
+  _diff_header += 'v' * pad_len
+  _diff_footer += '^' * pad_len
 
 def _handle_args(args):
   my_name = sys.argv[0].split('/')[-1]
@@ -295,6 +304,7 @@ def _show_and_let_user_act_on_diff(home_path):
       show_and_save(line, end=end)
     _let_user_act_on_diff(newpath, oldpath, ''.join(diff_strs), ignore_line3)
   print(_diff_footer % ('end ' + base).center(_basename_width))
+  print('')  # Print a blank line.
 
 def _let_user_act_on_diff(newpath, oldpath, diff, ignore_line3):
   global _changed_paths
@@ -543,6 +553,7 @@ _getch = _find_getch()
 # ====
 
 if __name__ ==  "__main__":
+  _init()
   try:
     _handle_args(sys.argv)
   except KeyboardInterrupt:
