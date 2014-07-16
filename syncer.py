@@ -69,12 +69,16 @@ _diff_header = '\nvvvvvvv %20s vvvvvvv'
 _diff_footer = '\n^^^^^^^ %20s ^^^^^^^'
 #                 1234567      1234567
 
+# The string used in .syncer to denote recently changed paths (_changed_paths).
 _changed_paths_header = 'recently changed paths'
-_changed_paths = []
+
+# This is a list of recently changed paths, where key 0 is from the most recent syncer check.
+# _changed_paths[0-9] = [changed_path]
+_changed_paths = {}
 
 
-# internal functions
-# ==================
+# top-level functions
+# ===================
 
 def _init():
   global _horiz_break, _diff_header, _diff_footer
@@ -156,20 +160,17 @@ def _check(action_args):
   home_paths = list(_diffs_by_home_path.keys())
   _show_diffs_in_order(home_paths)
   path_index = _ask_user_for_diff_index(home_paths)
-  # If we get this far, then we're committed to the check and can reset _changed_paths.
-  _changed_paths = []
+  # If we get this far, then we're committed to the check and set up a new changed paths list.
+  _add_new_changed_paths_list()
   chosen_paths = [home_paths[path_index]] if path_index != -1 else home_paths
   for home_path in chosen_paths: _show_and_let_user_act_on_diff(home_path)
-  _show_test_reminder_if_needed()
+  if _there_are_changed_paths(): _show_test_reminder()
 
 def _remind(action_args):
   global _changed_paths
   if len(action_args) > 0:
     print('Warning: ignoring the extra arguments %s' % ' '.join(action_args))
-  if _changed_paths:
-    _show_test_reminder_if_needed()
-  else:
-    print('No files changed during last run of "syncer check."')
+  _show_test_reminder()
 
 def _list(action_args):
   global _pairs
@@ -178,6 +179,10 @@ def _list(action_args):
   repo_file_pairs = _find_repo_file_pairs()
   for path1, path2 in repo_file_pairs: print(path1, path2)
   for path1, path2 in _pairs:          print(path1, path2)
+
+
+# internal functions
+# ==================
 
 def _find_repo_file_pairs():
   global _repos
@@ -201,11 +206,31 @@ def _debug_show_known_diffs():
   print('_paths_by_basename:')
   pprint.pprint(_paths_by_basename)
 
-def _show_test_reminder_if_needed():
+def _add_new_changed_paths_list():
   global _changed_paths
-  if _changed_paths:
+  for i in range(9, 0, -1):
+    if i - 1 in _changed_paths: _changed_paths[i] = _changed_paths[i - 1]
+  _changed_paths[0] = []
+
+# Returns True iff union(_changed_paths[how_recent]) is nonempty;
+# by default this focuses on just the single most recent changed paths list.
+def _there_are_changed_paths(how_recent=[0]):
+  global _changed_paths
+  return any([_changed_paths[i] for i in how_recent if i in _changed_paths])
+
+# Prints out recent changed paths based on the how_recent list;
+# prints out a message saying there are no changed paths if there are none.
+def _show_test_reminder(how_recent=[0]):
+  global _changed_paths
+  if _there_are_changed_paths(how_recent):
     print('The following paths have been changed; testing is recommended!')
-    for path in _changed_paths: print(path)
+    for i in how_recent:
+      for path in _changed_paths[i]:
+        print(path)
+  else:
+    num_runs = len(how_recent)
+    quantity_strs = ('', '') if num_runs == 1 else (str(num_runs) + ' ', 's')
+    print('No files changed during last %srun%s of syncer check.' % quantity_strs)
 
 # Shows something like the following for each given home_path:
 #   [1] <basename> [in repo name if not unique]
@@ -319,11 +344,11 @@ def _let_user_act_on_diff(newpath, oldpath, diff, ignore_line3):
   c = _wait_for_key_in_list(list('crws'))
   if c == 'c':
     _copy_src_to_dst(newpath, oldpath, preserve_line3=ignore_line3)
-    _changed_paths.append(oldpath)
+    _changed_paths[0].append(oldpath)
     print('Copied')
   if c == 'r':
     _copy_src_to_dst(oldpath, newpath, preserve_line3=ignore_line3)
-    _changed_paths.append(newpath)
+    _changed_paths[0].append(newpath)
     print('Reverse copied')
   if c == 'w':
     base = os.path.basename(newpath).replace('.', '_')
@@ -335,8 +360,9 @@ def _let_user_act_on_diff(newpath, oldpath, diff, ignore_line3):
     with open(fname, 'w') as f:
       f.write(diff)
     print('Diff saved in %s' % fname)
-    if _changed_paths: print('')  # Visually distinguish the test reminder below.
-    _show_test_reminder_if_needed()
+    if _there_are_changed_paths():
+      print('')  # Visually distinguish the test reminder below.
+      _show_test_reminder()
     _save_config()
     exit(0)
   if c == 's':
@@ -482,10 +508,15 @@ def _lines_of_file(path):
     lines = f.readlines()
   return lines
 
+
+# config file functions
+# =====================
+
 def _load_config():
   global _repos, _pairs, _changed_paths
   if not os.path.isfile(_config_path): return  # First run; empty lists are ok.
   adding_to = None
+  changed_paths_key = 0
   with open(_config_path, 'r') as f:
     for line in f:
       if len(line.strip()) == 0: continue
@@ -495,13 +526,15 @@ def _load_config():
         adding_to = _pairs
       elif line.startswith(_changed_paths_header):
         adding_to = _changed_paths
+      elif adding_to == _changed_paths:
+        m = re.match(r'  (\d):', line)
+        if m: changed_paths_key = int(m.group(1))
+        else: _changed_paths.setdefault(changed_paths_key, []).append(line.strip())
       elif adding_to is not None:
         adding_to.append(line.strip().split(' '))
-  # Undo the split(' ') in the case of _changed_paths.
-  _changed_paths = [' '.join(path) for path in _changed_paths]
 
-# Save the current set of tracked files; while running, this
-# data is kept in _repos and _pairs.
+# Save the current config data. This is the data kept in
+# _repos, _pairs, and _changed_paths.
 def _save_config():
   global _repos, _pairs, _changed_paths
   with open(_config_path, 'w') as f:
@@ -513,7 +546,10 @@ def _save_config():
       for pair in _pairs: f.write('  %s %s\n' % tuple(pair))
     if _changed_paths:
       f.write('%s:\n' % _changed_paths_header)
-      for path in _changed_paths: f.write('  %s\n' % path)
+      for key in _changed_paths.keys():
+        f.write('  %d:\n' % key)
+        for path in _changed_paths[key]:
+          f.write('    %s\n' % path)
 
 
 # input functions
