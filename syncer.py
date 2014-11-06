@@ -438,11 +438,15 @@ def _check_for_home_info(filepath):
 # This is used in _get_all_subpaths.
 _subpaths_of_root = {}
 
+def _should_skip_dir(dirname):
+  return dirname == '.git'
+
 def _get_all_subpaths(root):
   global _subpaths_of_root
   if root in _subpaths_of_root: return _subpaths_of_root[root]
   subpaths = {}
   for path, dirs, files in os.walk(root):
+    dirs = [d for d in dirs if not _should_skip_dir(d)]
     for f in files: subpaths.setdefault(f, []).append(path + os.sep + f)
   _subpaths_of_root[root] = subpaths
   return subpaths
