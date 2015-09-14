@@ -443,7 +443,7 @@ def _get_homeinfo_regex():
   return _homeinfo_regex
 
 # Checks for a recognized repo name on line 3.
-# Returns [home_dir, home_subdir] if found; home_subdir may be None;
+# Returns [home_repo, home_subdir] if found; home_subdir may be None;
 # return None if no repo name is recognized.
 def _check_for_home_info(filepath):
   global _cached_info_by_path, _repos
@@ -490,11 +490,11 @@ def _get_all_subpaths(root):
   _subpaths_of_root[root] = subpaths
   return subpaths
 
-# _known_home_paths[(home_dir, home_subdir, base)] = home_path
+# _known_home_paths[(home_repo, home_subdir, base)] = home_path
 # This is used in _find_file_path.
 _known_home_paths = {}
 
-# Takes a [home_dir, home_subdir] pair as returned from _check_for_home_info,
+# Takes a [home_repo, home_subdir] pair as returned from _check_for_home_info,
 # and resolves a file path for the home version. Emits a warning if
 # multiple files match the given home_info.
 def _find_file_path(home_info, filepath):
