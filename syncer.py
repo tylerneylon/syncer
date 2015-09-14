@@ -5,7 +5,8 @@
 """
   syncer track <repo-name>      # Track the current dir with the given repo name (a name may be, e.g., a github url).
   syncer track <file1> <file2>  # Track the given file pair.
-  syncer check                  # Check all known repo-name/dir and file/file pairs for differences.
+  syncer check                  # Check current repo for any incoming out outgoing file changes.
+  syncer check --all            # Check all known repo-name/dir and file/file pairs for differences.
   syncer remind                 # Print all paths affected by last run of "syncer check"; useful for testing.
   syncer list                   # Print all file pairs checked for equality.
 """
@@ -75,6 +76,11 @@ _changed_paths_header = 'recently changed paths'
 # This is a list of recently changed paths, where key 0 is from the most recent syncer check.
 # _changed_paths[0-9] = [changed_path]
 _changed_paths = {}
+
+# This is used by the 'syncer check' command to indicate when we're filtering to a local repo, and
+# to indicate the path of that local repo.
+_do_use_local_repo = True
+_local_repo_path = None
 
 
 # top-level functions
@@ -150,6 +156,7 @@ def _check(action_args):
   if len(action_args) > 0:
     print('Unexpected arguments after "check": %s' % ' '.join(action_args))
     exit(2)
+  _setup_local_repo_globals()
   print('Checking for differences.')
   repo_file_pairs = _find_repo_file_pairs()
   for home_file_path, copy_path in repo_file_pairs:
@@ -183,6 +190,19 @@ def _list(action_args):
 
 # internal functions
 # ==================
+
+def _setup_local_repo_globals():
+  global _do_use_local_repo, _local_repo_path
+  # Find the current local repo.
+  cwd = os.getcwd()
+  for _, repo_path in _repos:
+    if cwd.startswith(repo_path):
+      _do_use_local_repo = True
+      _local_repo_path   = repo_path
+      return
+  # If we get here, then we aren't in any repo.
+  print('Error: not in a known repo; use "syncer check --all" to check all possible connections.')
+  exit(1)
 
 def _find_repo_file_pairs():
   global _repos
@@ -491,7 +511,12 @@ def _find_file_path(home_info, filepath):
 # If one path is a home_path, this expects that as the first argument.
 def _compare_full_paths(path1, path2, ignore_line3=False):
   # Turn this on if useful for debugging.
-  if False: print('_compare_full_paths(%s, %s)' % (path1, path2))
+  if False: print('_compare_full_paths(%s, %s)' % (path0, path2))
+  if _do_use_local_repo:
+    # Since we're focused on the local repo, skip over pairs that don't affect it.
+    if (not path1.startswith(_local_repo_path) and
+        not path2.startswith(_local_repo_path)):
+      return
   if _files_are_same(path1, path2, ignore_line3): return
   _diffs_by_home_path.setdefault(path1, set()).add((path2, ignore_line3))
   base = os.path.basename(path1)
