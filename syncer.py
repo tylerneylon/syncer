@@ -452,8 +452,11 @@ def _check_for_home_info(filepath):
   if filepath in _cached_info_by_path:
     info = _cached_info_by_path[filepath]
     if st_times == info['times']:
-      return info['home_info']
+      home_info = info['home_info']
+      return home_info if home_info[0] else None
   # If we get here, then the cache didn't have the info; need to populate it.
+  info = {'home_info': [None, None], 'times': st_times}
+  _cached_info_by_path[filepath] = info
   with open(filepath, 'r') as f:
     try:
       file_start = f.read(4096)
@@ -466,7 +469,7 @@ def _check_for_home_info(filepath):
     m = regex.search(line3)
     if m is None: return None
     home_info = [m.group(1), m.group(2)]
-    _cached_info_by_path[filepath] = {'home_info': home_info, 'times': st_times}
+    info['home_info'] = home_info
     return home_info
 
 # A cache to avoid redundant os.walk calls.
@@ -600,17 +603,15 @@ def _load_cached_info():
         line = line.strip()
         if m:
           path = m.group(0).lstrip()
-          expected_key    = 'home_info'
+          key = 'home_info'
         else:
           info = _cached_info_by_path.setdefault(path, {})
-          if not expected_key in info:
-            if expected_key == 'home_info':
-              info[expected_key] = [line[1:]]  # Ignore the initial : character.
-            else:
-              info[expected_key] = tuple([int(t) for t in line.split(' ')])
+          if key == 'home_info':
+            # The [1:] here ignores the initial : character on non-None string values.
+            info.setdefault(key, []).append(line[1:] if line != 'None' else None)
+            if len(info[key]) == 2: key = 'times'
           else:
-            info[expected_key].append(line[1:] if line != 'None' else None)
-            expected_key = 'times'
+            info[key] = tuple([int(t) for t in line.split(' ')])
 
 def _load_config():
   if not os.path.isdir(_config_path): return  # First run; empty lists are ok.
@@ -647,8 +648,9 @@ def _save_cached_info():
     f.write(_cached_info_header + '\n')
     for path, info in _cached_info_by_path.items():
       f.write('  %s\n' % path)
-      f.write('    :%s\n' % info['home_info'][0])
-      f.write('    %s\n' % ((':' + info['home_info'][1]) if info['home_info'][1] else 'None'))
+      for i in range(2):
+        item = info['home_info'][i]
+        f.write('    %s\n' % ((':' + item) if item else 'None'))
       f.write('    %d %d\n' % info['times'])
 
 # Save the current config data. This is the data kept in
