@@ -77,6 +77,11 @@ _changed_paths_header = 'recently changed paths'
 # _changed_paths[0-9] = [changed_path]
 _changed_paths = {}
 
+# Header and dictionary to track cached info.
+# _cached_info_by_path[path] = {home_info: [home_repo, home_subdir], times: (mtime, ctime)}
+_cached_info_header = 'cached info (home_repo, home_subdir, file times)'
+_cached_info_by_path = {}
+
 # This is used by the 'syncer check' command to indicate when we're filtering to a local repo, and
 # to indicate the path of that local repo.
 _do_use_local_repo = True
@@ -209,6 +214,7 @@ def _find_repo_file_pairs():
   repo_file_pairs = []
   for name, root in _repos:
     for path, dirs, files in os.walk(root):
+      dirs[:] = [d for d in dirs if not _should_skip_dir(d)]
       for filename in files:
         filepath = os.path.join(path, filename)
         home_info = _check_for_home_info(filepath)
@@ -259,6 +265,7 @@ def _show_diffs_in_order(home_paths):
   if len(home_paths) == 0:
     print('No differences found.')
     print('All good!')
+    _save_config()
     exit(0)
   print('Differences found:')
   # Find column widths.
@@ -439,7 +446,14 @@ def _get_homeinfo_regex():
 # Returns [home_dir, home_subdir] if found; home_subdir may be None;
 # return None if no repo name is recognized.
 def _check_for_home_info(filepath):
-  global _repos
+  global _cached_info_by_path, _repos
+  st = os.stat(filepath)
+  st_times = (st.st_ctime, st.st_mtime)
+  if filepath in _cached_info_by_path:
+    info = _cached_info_by_path[filepath]
+    if st_times == info['times']:
+      return info['home_info']
+  # If we get here, then the cache didn't have the info; need to populate it.
   with open(filepath, 'r') as f:
     try:
       file_start = f.read(4096)
@@ -451,7 +465,9 @@ def _check_for_home_info(filepath):
     regex = _get_homeinfo_regex()
     m = regex.search(line3)
     if m is None: return None
-    return [m.group(1), m.group(2)]
+    home_info = [m.group(1), m.group(2)]
+    _cached_info_by_path[filepath] = {'home_info': home_info, 'times': st_times}
+    return home_info
 
 # A cache to avoid redundant os.walk calls.
 # _subpaths_of_root[root][base] = [path]
@@ -541,44 +557,107 @@ def _lines_of_file(path):
 # config file functions
 # =====================
 
-def _load_config():
-  global _repos, _pairs, _changed_paths
-  if not os.path.isfile(_config_path): return  # First run; empty lists are ok.
-  adding_to = None
-  changed_paths_key = 0
-  with open(_config_path, 'r') as f:
+def _load_file_connections():
+  global _repos, _pairs
+  file_path = os.path.join(_config_path, 'file_connections')
+  if not os.path.isfile(file_path): return
+  with open(file_path, 'r') as f:
     for line in f:
       if len(line.strip()) == 0: continue
       if line.startswith(_repos_header):
         adding_to = _repos
       elif line.startswith(_pairs_header):
         adding_to = _pairs
-      elif line.startswith(_changed_paths_header):
+      elif adding_to is not None:
+        adding_to.append(line.strip().split(' '))
+
+def _load_changed_paths():
+  global _changed_paths
+  file_path = os.path.join(_config_path, 'changed_paths')
+  if not os.path.isfile(file_path): return
+  with open(file_path, 'r') as f:
+    for line in f:
+      if len(line.strip()) == 0: continue
+      if line.startswith(_changed_paths_header):
         adding_to = _changed_paths
       elif adding_to == _changed_paths:
         m = re.match(r'  (\d):', line)
         if m: changed_paths_key = int(m.group(1))
         else: _changed_paths.setdefault(changed_paths_key, []).append(line.strip())
-      elif adding_to is not None:
-        adding_to.append(line.strip().split(' '))
 
-# Save the current config data. This is the data kept in
-# _repos, _pairs, and _changed_paths.
-def _save_config():
-  global _repos, _pairs, _changed_paths
-  with open(_config_path, 'w') as f:
+def _load_cached_info():
+  global _cached_info_by_path
+  file_path = os.path.join(_config_path, 'cached_info')
+  if not os.path.isfile(file_path): return
+  with open(file_path, 'r') as f:
+    adding_to = None
+    for line in f:
+      if len(line.strip()) == 0: continue
+      if line.startswith(_cached_info_header):
+        adding_to = _cached_info_by_path
+      elif adding_to == _cached_info_by_path:
+        m = re.match(r'  \S.*', line)  # All non-paths start with a space.
+        line = line.strip()
+        if m:
+          path = m.group(0).lstrip()
+          expected_key    = 'home_info'
+        else:
+          info = _cached_info_by_path.setdefault(path, {})
+          if not expected_key in info:
+            if expected_key == 'home_info':
+              info[expected_key] = [line[1:]]  # Ignore the initial : character.
+            else:
+              info[expected_key] = tuple([int(t) for t in line.split(' ')])
+          else:
+            info[expected_key].append(line[1:] if line != 'None' else None)
+            expected_key = 'times'
+
+def _load_config():
+  if not os.path.isdir(_config_path): return  # First run; empty lists are ok.
+  adding_to = None
+  changed_paths_key = 0
+  _load_file_connections()
+  _load_changed_paths()
+  _load_cached_info()
+
+def _save_file_connections():
+  file_path = os.path.join(_config_path, 'file_connections')
+  with open(file_path, 'w') as f:
     if _repos:
       f.write('%s:\n' % _repos_header)
       for repo in _repos: f.write('  %s %s\n' % tuple(repo))
     if _pairs:
       f.write('%s:\n' % _pairs_header)
       for pair in _pairs: f.write('  %s %s\n' % tuple(pair))
+
+def _save_changed_paths():
+  file_path = os.path.join(_config_path, 'changed_paths')
+  with open(file_path, 'w') as f:
     if _changed_paths:
       f.write('%s:\n' % _changed_paths_header)
       for key in _changed_paths.keys():
         f.write('  %d:\n' % key)
         for path in _changed_paths[key]:
           f.write('    %s\n' % path)
+
+def _save_cached_info():
+  global _cached_info_by_path
+  file_path = os.path.join(_config_path, 'cached_info')
+  with open(file_path, 'w') as f:
+    f.write(_cached_info_header + '\n')
+    for path, info in _cached_info_by_path.items():
+      f.write('  %s\n' % path)
+      f.write('    :%s\n' % info['home_info'][0])
+      f.write('    %s\n' % ((':' + info['home_info'][1]) if info['home_info'][1] else 'None'))
+      f.write('    %d %d\n' % info['times'])
+
+# Save the current config data. This is the data kept in
+# _repos, _pairs, and _changed_paths.
+def _save_config():
+  if not os.path.isdir(_config_path): os.mkdir(_config_path)
+  _save_file_connections()
+  _save_changed_paths()
+  _save_cached_info()
 
 
 # input functions
