@@ -103,6 +103,8 @@ def _init():
 def _handle_args(args):
   my_name = sys.argv[0].split('/')[-1]
   parser = OptionParser(usage=__doc__)
+  parser.add_option('--all', action='store_true', dest='do_check_all', default=False,
+                    help='for check action, globally checks all tracked files')
   (options, args) = parser.parse_args(args)
   if len(args) <= 1:
     parser.print_help()
@@ -113,7 +115,7 @@ def _handle_args(args):
     _track(args[2:])
   elif action == 'check':
     _load_config()
-    _check(args[2:])
+    _check(args[2:], options)
   elif action == 'remind':
     _load_config()
     _remind(args[2:])
@@ -156,8 +158,9 @@ def _track(action_args):
     _pairs.append(paths)
     print('Started tracking the files:\n%s\n%s' % tuple(_pairs[-1]))
 
-def _check(action_args):
-  global _repos, _pairs, _changed_paths
+def _check(action_args, options):
+  global _repos, _pairs, _changed_paths, _do_use_local_repo
+  if options.do_check_all: _do_use_local_repo = False
   if len(action_args) > 0:
     print('Unexpected arguments after "check": %s' % ' '.join(action_args))
     exit(2)
