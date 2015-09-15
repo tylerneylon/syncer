@@ -160,11 +160,13 @@ def _track(action_args):
 
 def _check(action_args, options):
   global _repos, _pairs, _changed_paths, _do_use_local_repo
-  if options.do_check_all: _do_use_local_repo = False
   if len(action_args) > 0:
     print('Unexpected arguments after "check": %s' % ' '.join(action_args))
     exit(2)
-  _setup_local_repo_globals()
+  if options.do_check_all:
+    _do_use_local_repo = False
+  else:
+    _setup_local_repo_globals()
   print('Checking for differences.')
   repo_file_pairs = _find_repo_file_pairs()
   for home_file_path, copy_path in repo_file_pairs:
