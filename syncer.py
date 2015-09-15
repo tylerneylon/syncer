@@ -52,8 +52,12 @@ _pairs_header = 'file-file pairs'
 _pairs = []
 
 # For accumulating differences.
-# {home_path: set((copy_path, ignore_line3)}
+# {home_path: set((copy_path, ignore_line3))}
 _diffs_by_home_path = {}
+
+# For collecting the full file-connection graph.
+# {full_path: set((home_path, copy_path, ignore_line3))}
+_conns_by_path = {}
 
 # For displaying minimally identifying strings for files.
 # {basename: set(home_paths)}
@@ -177,7 +181,11 @@ def _check(action_args, options):
   # If we get this far, then we're committed to the check and set up a new changed paths list.
   _add_new_changed_paths_list()
   chosen_paths = [home_paths[path_index]] if path_index != -1 else home_paths
-  for home_path in chosen_paths: _show_and_let_user_act_on_diff(home_path)
+  # Filter out diffs the user has chosen to ignore for now.
+  # Transitive closure may add more home paths, so we don't consult chosen_paths after this.
+  for home_path in list(_diffs_by_home_path):
+    if home_path not in chosen_paths: del _diffs_by_home_path[home_path]
+  _show_and_let_user_act_on_diffs()
   if _there_are_changed_paths(): _show_test_reminder()
 
 def _remind(action_args):
@@ -330,36 +338,61 @@ def _ask_user_for_diff_index(home_paths):
   # We return either a 0-based index of the path, or -1 for the 'all' choice.
   return ok_chars.index(c) - 1
 
-# Present a specific diff and let the user respond to it.
-def _show_and_let_user_act_on_diff(home_path):
-  no_newline_str = ' ^^^^^^^ (no ending newline)'
+def _show_and_let_user_act_on_diffs():
+  global _do_use_local_repo
+  # Turn off local filtering to allow _compare_full_paths to follow transitive diffs.
+  _do_use_local_repo = False
+  while len(_diffs_by_home_path) > 0:
+    home_paths = sorted(_diffs_by_home_path.keys())
+    home_path = home_paths[0]
+    copy_path, ignore_line3 = _diffs_by_home_path[home_path].pop()
+    _show_and_let_user_act_on_diff(home_path, copy_path, ignore_line3)
+    if len(_diffs_by_home_path[home_path]) == 0:
+      del _diffs_by_home_path[home_path]
+
+# These globals are only used by the next function, so they make more sense here.
+# They're used to determine when we should display a header/footer for groupings based on filename.
+_last_home_path = None
+_last_base      = None
+
+def _show_and_let_user_act_on_diff(home_path, copy_path, ignore_line3):
+  global _last_home_path, _last_base
+
+  # Print a footer and/or header as appropriate.
   base = os.path.basename(home_path)
-  print(_diff_header % ('start ' + base).center(_basename_width))
-  for diff_path, ignore_line3 in _diffs_by_home_path[home_path]:
-    home_is_older = (os.path.getmtime(home_path) < os.path.getmtime(diff_path))
-    oldpath, newpath = (home_path, diff_path) if home_is_older else (diff_path, home_path)
+  if _last_home_path != home_path:
+    if _last_home_path is not None:
+      print(_diff_footer % ('end ' + _last_base).center(_basename_width))
+      print('')  # Print a blank line.
+    print(_diff_header % ('start ' + base).center(_basename_width))
 
-    diff_strs = []
-    def show_and_save(s, end='\n'):
-      print(s, end=end)
-      diff_strs.append(s + end)
+  # Determine which file version is older.
+  home_is_older = (os.path.getmtime(home_path) < os.path.getmtime(copy_path))
+  oldpath, newpath = (home_path, copy_path) if home_is_older else (copy_path, home_path)
 
-    show_and_save('')
-    show_and_save('Diff between:')
-    show_and_save('older: ' + oldpath)
-    show_and_save('newer: ' + newpath)
-    show_and_save('')
+  # Build and print diff strings.
+  diff_strs = []
+  def show_and_save(s, end='\n'):
+    print(s, end=end)
+    diff_strs.append(s + end)
+  show_and_save('')
+  show_and_save('Diff between:')
+  show_and_save('older: ' + oldpath)
+  show_and_save('newer: ' + newpath)
+  show_and_save('')
+  short1, short2 = _short_names(oldpath, newpath)
+  diff = difflib.unified_diff(
+      _file_lines(oldpath), _file_lines(newpath),
+      fromfile=short1, tofile=short2)
+  no_newline_str = ' ^^^^^^^ (no ending newline)'
+  for line in diff:
+    end = '' if line.endswith('\n') else ('\n' + no_newline_str + '\n')
+    show_and_save(line, end=end)
 
-    short1, short2 = _short_names(oldpath, newpath)
-    diff = difflib.unified_diff(
-        _file_lines(oldpath), _file_lines(newpath),
-        fromfile=short1, tofile=short2)
-    for line in diff:
-      end = '' if line.endswith('\n') else ('\n' + no_newline_str + '\n')
-      show_and_save(line, end=end)
-    _let_user_act_on_diff(newpath, oldpath, ''.join(diff_strs), ignore_line3)
-  print(_diff_footer % ('end ' + base).center(_basename_width))
-  print('')  # Print a blank line.
+  # Accept user action and cleanup.
+  _let_user_act_on_diff(newpath, oldpath, ''.join(diff_strs), ignore_line3)
+  _last_home_path = home_path
+  _last_base      = base
 
 def _let_user_act_on_diff(newpath, oldpath, diff, ignore_line3):
   global _changed_paths
@@ -373,12 +406,10 @@ def _let_user_act_on_diff(newpath, oldpath, diff, ignore_line3):
   print('What would you like to do?')
   c = _wait_for_key_in_list(list('crws'))
   if c == 'c':
-    _copy_src_to_dst(newpath, oldpath, preserve_line3=ignore_line3)
-    _changed_paths[0].append(oldpath)
+    _copy_src_to_dst_and_update_metadata(newpath, oldpath, preserve_line3=ignore_line3)
     print('Copied')
   if c == 'r':
-    _copy_src_to_dst(oldpath, newpath, preserve_line3=ignore_line3)
-    _changed_paths[0].append(newpath)
+    _copy_src_to_dst_and_update_metadata(oldpath, newpath, preserve_line3=ignore_line3)
     print('Reverse copied')
   if c == 'w':
     base = os.path.basename(newpath).replace('.', '_')
@@ -413,6 +444,7 @@ def _wait_for_key_in_list(ok_chars):
   return c
 
 def _copy_src_to_dst(src, dst, preserve_line3=False):
+  global _changed_paths
   if not preserve_line3:
     shutil.copy2(src, dst)
     return
@@ -422,6 +454,13 @@ def _copy_src_to_dst(src, dst, preserve_line3=False):
   src_lines[2] = dst_lines[2]
   with open(dst, 'w') as f:
     f.write(''.join(src_lines))
+
+def _copy_src_to_dst_and_update_metadata(src, dst, preserve_line3=False):
+  _copy_src_to_dst(src, dst, preserve_line3)
+  _changed_paths[0].append(dst)
+  # Check for other files affected by this change.
+  for home_path, copy_path, ignore_line3 in _conns_by_path[dst]:
+    _compare_full_paths(home_path, copy_path, ignore_line3)
 
 def _file_lines(filename):
   with open(filename, 'r') as f:
@@ -534,6 +573,8 @@ def _find_file_path(home_info, filepath):
 def _compare_full_paths(path1, path2, ignore_line3=False):
   # Turn this on if useful for debugging.
   if False: print('_compare_full_paths(%s, %s)' % (path0, path2))
+  _conns_by_path.setdefault(path1, set()).add((path1, path2, ignore_line3))
+  _conns_by_path.setdefault(path2, set()).add((path1, path2, ignore_line3))
   if _do_use_local_repo:
     # Since we're focused on the local repo, skip over pairs that don't affect it.
     if (not path1.startswith(_local_repo_path) and
