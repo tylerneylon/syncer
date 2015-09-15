@@ -84,8 +84,8 @@ _cached_info_by_path = {}
 
 # This is used by the 'syncer check' command to indicate when we're filtering to a local repo, and
 # to indicate the path of that local repo.
-_do_use_local_repo = True
-_local_repo_path = None
+_do_use_local_repo = False
+_local_repo_path   = None
 
 
 # top-level functions
@@ -163,10 +163,7 @@ def _check(action_args, options):
   if len(action_args) > 0:
     print('Unexpected arguments after "check": %s' % ' '.join(action_args))
     exit(2)
-  if options.do_check_all:
-    _do_use_local_repo = False
-  else:
-    _setup_local_repo_globals()
+  _setup_local_repo_globals(options)
   print('Checking for differences.')
   repo_file_pairs = _find_repo_file_pairs()
   for home_file_path, copy_path in repo_file_pairs:
@@ -201,8 +198,9 @@ def _list(action_args):
 # internal functions
 # ==================
 
-def _setup_local_repo_globals():
+def _setup_local_repo_globals(options):
   global _do_use_local_repo, _local_repo_path
+  if options.do_check_all: return  # _do_use_local_repo is False by default.
   # Find the current local repo.
   cwd = os.getcwd()
   for _, repo_path in _repos:
