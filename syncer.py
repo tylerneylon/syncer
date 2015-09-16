@@ -98,6 +98,8 @@ _copy_dirs_by_home = {}
 # _copy_info_by_copy_path[copy_path] = <copy_info>
 _copy_info_by_copy_path = {}
 
+_unknown_home_path = '(unknown home path)'
+
 
 # top-level functions
 # ===================
@@ -238,20 +240,21 @@ def _find_repo_file_pairs():
         home_info = _check_for_home_info(filepath)
         if home_info is None:    continue
         if home_info[0] == name: continue
-        home_path, home_subpath = _find_home_path(home_info, filepath)
+        home_path, home_subpath, was_found = _find_home_path(home_info, filepath)
         if home_path is None: continue  # An error is already printed by _find_home_path.
         repo_file_pairs.append([home_path, filepath])
 
-        # Update directory-tracking data.
-        copy_paths_by_home_subpath = _copy_dirs_by_home.setdefault(home_info[0], {})
-        copy_info_by_copy_path = copy_paths_by_home_subpath.setdefault(home_subpath, {})
-        filedir = os.path.dirname(filepath)
-        home_dir_path = os.path.dirname(home_path)
-        default_copy_info = {'tracking': True, 'home_path': home_dir_path}
-        # It's important that same dict is used twice here; if we edit it later from either source,
-        # the data changes in both structures - that indexed by home, and that indexed by copy.
-        copy_info_by_copy_path.setdefault(filedir, default_copy_info)
-        _copy_info_by_copy_path.setdefault(filedir, default_copy_info)
+        if was_found:
+          # Update directory-tracking data.
+          copy_paths_by_home_subpath = _copy_dirs_by_home.setdefault(home_info[0], {})
+          copy_info_by_copy_path = copy_paths_by_home_subpath.setdefault(home_subpath, {})
+          filedir = os.path.dirname(filepath)
+          home_dir_path = os.path.dirname(home_path)
+          default_copy_info = {'tracking': True, 'home_path': home_dir_path}
+          # It's important that same dict is used twice here; if we edit it later from either source,
+          # the data changes in both structures - that indexed by home, and that indexed by copy.
+          copy_info_by_copy_path.setdefault(filedir, default_copy_info)
+          _copy_info_by_copy_path.setdefault(filedir, default_copy_info)
   return repo_file_pairs
 
 def _debug_show_known_diffs():
@@ -337,10 +340,13 @@ def _get_uniq_subpaths(path1, path2):
 # Returns a comparison result string based on the files' timestamps.
 # Return values are '<-newer  ', '  newer->' or '!='.
 def _compare_paths_by_time(path1, path2):
+  if not os.path.isfile(path1): return " <- doesn't exist    "
+  if not os.path.isfile(path2): return "    doesn't exist -> "
   t1 = os.path.getmtime(path1)
   t2 = os.path.getmtime(path2)
-  if t1 < t2: return '  newer->'
-  if t1 > t2: return '<-newer  '
+  # For reference:   '    doesn't exist    '
+  if t1 < t2: return '      newer   -> '
+  if t1 > t2: return ' <-   newer      '
   return '!='
 
 # Present the user with an action prompt and receive their input.
@@ -368,22 +374,23 @@ def _show_and_let_user_act_on_diffs():
     if len(_diffs_by_home_path[home_path]) == 0:
       del _diffs_by_home_path[home_path]
 
-# These globals are only used by the next function, so they make more sense here.
-# They're used to determine when we should display a header/footer for groupings based on filename.
-_last_home_path = None
-_last_base      = None
+def _let_user_handle_add_or_delete_diff(home_path, home_exists, copy_path, copy_exists):
+  here_path, gone_path = (home_path, copy_path) if home_exists else (copy_path, home_path)
 
-def _show_and_let_user_act_on_diff(home_path, copy_path, ignore_line3):
-  global _last_home_path, _last_base
+  # Build and print diff strings.
+  diff_strs = []
+  def show_and_save(s, end='\n'):
+    print(s, end=end)
+    diff_strs.append(s + end)
+  show_and_save('')
+  show_and_save('exists:        ' + here_path)
+  show_and_save("doesn't exist: " + gone_path)
+  show_and_save('')
 
-  # Print a footer and/or header as appropriate.
-  base = os.path.basename(home_path)
-  if _last_home_path != home_path:
-    if _last_home_path is not None:
-      print(_diff_footer % ('end ' + _last_base).center(_basename_width))
-      print('')  # Print a blank line.
-    print(_diff_header % ('start ' + base).center(_basename_width))
+  # Accept user action and cleanup.
+  _let_user_act_on_add_or_delete_diff(here_path, gone_path, ''.join(diff_strs))
 
+def _let_user_handle_standard_diff(home_path, copy_path, ignore_line3):
   # Determine which file version is older.
   home_is_older = (os.path.getmtime(home_path) < os.path.getmtime(copy_path))
   oldpath, newpath = (home_path, copy_path) if home_is_older else (copy_path, home_path)
@@ -409,8 +416,71 @@ def _show_and_let_user_act_on_diff(home_path, copy_path, ignore_line3):
 
   # Accept user action and cleanup.
   _let_user_act_on_diff(newpath, oldpath, ''.join(diff_strs), ignore_line3)
+
+# These globals are only used by the next function, so they make more sense here.
+# They're used to determine when we should display a header/footer for groupings based on filename.
+_last_home_path = None
+_last_base      = None
+
+def _show_and_let_user_act_on_diff(home_path, copy_path, ignore_line3):
+  global _last_home_path, _last_base
+
+  # Print a footer and/or header as appropriate.
+  base = os.path.basename(home_path)
+  if _last_home_path != home_path:
+    if _last_home_path is not None:
+      print(_diff_footer % ('end ' + _last_base).center(_basename_width))
+      print('')  # Print a blank line.
+    print(_diff_header % ('start ' + base).center(_basename_width))
+
+  # Distinguish between a standard and an add/delete diff.
+  home_exists = os.path.isfile(home_path)
+  copy_exists = os.path.isfile(copy_path)
+
+  # Show diff and act on user feedback.
+  if ignore_line3 or (home_exists and copy_exists):
+    _let_user_handle_standard_diff(home_path, copy_path, ignore_line3)
+  else:
+    _let_user_handle_add_or_delete_diff(home_path, home_exists, copy_path, copy_exists)
+
+  # Save data used to appropriately show header/footers on home_path changes.
   _last_home_path = home_path
   _last_base      = base
+
+def _let_user_act_on_add_or_delete_diff(here_path, gone_path, diff):
+  global _changed_paths
+  print(_horiz_break)
+  here_short, gone_short = _short_names(here_path, gone_path)
+  fmt  = 'Actions:\n'
+  fmt += '  [a]dd %s as %s;\n'
+  fmt += '  [d]elete %s;\n'
+  fmt += '  [s]kip this file; [w]rite diff file and quit; [q]uit.'
+  print(fmt % (here_short, gone_short, here_short))
+  print('What would you like to do?')
+  c = _wait_for_key_in_list(list('adws'))
+  if c == 'a':
+    _copy_src_to_dst_and_update_metadata(here_path, gone_path)
+    print('Added')
+  if c == 'd':
+    _delete_path_and_update_metadata(here_path)
+    print('Deleted')
+  if c == 'w':
+    base = os.path.basename(here_path).replace('.', '_')
+    fname = '%s_diff.txt' % base
+    offset = 1
+    while os.path.isfile(fname):
+      offset += 1  # Purposefully have the next one called 'v2'.
+      fname = '%s_diff_v%d.txt' % (base, offset)
+    with open(fname, 'w') as f:
+      f.write(diff)
+    print('Diff saved in %s' % fname)
+    if _there_are_changed_paths():
+      print('')  # Visually distinguish the test reminder below.
+      _show_test_reminder()
+    _save_config()
+    exit(0)
+  if c == 's':
+    print('Skipped!')
 
 def _let_user_act_on_diff(newpath, oldpath, diff, ignore_line3):
   global _changed_paths
@@ -480,6 +550,13 @@ def _copy_src_to_dst_and_update_metadata(src, dst, preserve_line3=False):
   for home_path, copy_path, ignore_line3 in _conns_by_path[dst]:
     _compare_full_paths(home_path, copy_path, ignore_line3)
 
+def _delete_path_and_update_metadata(path):
+  os.remove(path)
+  _changed_paths[0].append(path)
+  # Check for other files affected by this change.
+  for home_path, copy_path, ignore_line3 in _conns_by_path[path]:
+    _compare_full_paths(home_path, copy_path, ignore_line3)
+
 def _file_lines(filename):
   with open(filename, 'r') as f:
     return f.readlines()
@@ -540,14 +617,15 @@ _subpaths_of_root = {}
 def _should_skip_dir(dirname):
   return dirname == '.git'
 
+# For the convenience of _find_home_path, all subpath tuples are of the form (path, subpath, True).
 def _get_all_subpaths(root):
   global _subpaths_of_root
   if root in _subpaths_of_root: return _subpaths_of_root[root]
   subpaths = {}
   for path, dirs, files in os.walk(root):
-    dirs = [d for d in dirs if not _should_skip_dir(d)]
+    dirs[:] = [d for d in dirs if not _should_skip_dir(d)]
     subpath = path[len(root) + 1:]
-    for f in files: subpaths.setdefault(f, []).append((path + os.sep + f, subpath))
+    for f in files: subpaths.setdefault(f, []).append((path + os.sep + f, subpath, True))
   _subpaths_of_root[root] = subpaths
   return subpaths
 
@@ -555,9 +633,10 @@ def _get_all_subpaths(root):
 # This is used in _find_home_path.
 _known_home_paths = {}
 
-# Takes a [home_repo, home_subdir] pair as returned from _check_for_home_info,
-# and resolves a file path for the home version. Emits a warning if
-# multiple files match the given home_info.
+# Takes a [home_repo, home_subdir] pair as returned from _check_for_home_info, and attempts to
+# return a (home_path, home_subpath, was_found) tuple. Emits a warning if multiple files match the
+# given home_info. The value of home_subpath is as in:
+#   <home_path> = <home_root> <home_subpath> <filename>.
 def _find_home_path(home_info, filepath):
   global _repos, _known_home_paths
   for name, root in _repos:
@@ -570,9 +649,8 @@ def _find_home_path(home_info, filepath):
   if home_info[1]:
     home_path = os.path.join(home_root, home_info[1], base)
     if not os.path.isfile(home_path):
-      print('Error: %s pointed to home version %s, but it doesn\'t exist.' % (filepath, home_path))
-      return None
-    val = (home_path, home_info[1])
+      return home_path, home_info[1], False  # False indicates that the home file wasn't found.
+    val = (home_path, home_info[1], True)
     _known_home_paths[key] = val
     return val
   # Handle the case that no subdir was given; we must walk the dir to find it.
@@ -593,6 +671,7 @@ def _find_home_path(home_info, filepath):
 def _compare_full_paths(path1, path2, ignore_line3=False):
   # Turn this on if useful for debugging.
   if False: print('_compare_full_paths(%s, %s)' % (path0, path2))
+  if not os.path.isfile(path1) and not os.path.isfile(path2): return
   _conns_by_path.setdefault(path1, set()).add((path1, path2, ignore_line3))
   _conns_by_path.setdefault(path2, set()).add((path1, path2, ignore_line3))
   if _do_use_local_repo:
@@ -606,6 +685,7 @@ def _compare_full_paths(path1, path2, ignore_line3=False):
   _paths_by_basename.setdefault(base, set()).add(path1)
 
 def _files_are_same(path1, path2, ignore_line3=False):
+  if not os.path.isfile(path1) or not os.path.isfile(path2): return False
   if not ignore_line3: return filecmp.cmp(path1, path2)
   # We need to do more work to ignore line 3.
   lines = [None, None]
