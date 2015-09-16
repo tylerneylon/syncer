@@ -91,6 +91,13 @@ _cached_info_by_path = {}
 _do_use_local_repo = False
 _local_repo_path   = None
 
+# _copy_dirs_by_home[home_name][home_subpath][copy_path] = <copy_info>
+#     <copy_info> = {tracking: <bool>, home_path: <str>, excluded: <set>}
+# The excluded set contains subpaths s so that copy_path/s is an excluded dir or file.
+_copy_dirs_by_home = {}
+# _copy_info_by_copy_path[copy_path] = <copy_info>
+_copy_info_by_copy_path = {}
+
 
 # top-level functions
 # ===================
@@ -231,9 +238,20 @@ def _find_repo_file_pairs():
         home_info = _check_for_home_info(filepath)
         if home_info is None:    continue
         if home_info[0] == name: continue
-        home_file_path = _find_file_path(home_info, filepath)
-        if home_file_path is None: continue  # An error is already printed by _find_file_path.
-        repo_file_pairs.append([home_file_path, filepath])
+        home_path, home_subpath = _find_home_path(home_info, filepath)
+        if home_path is None: continue  # An error is already printed by _find_home_path.
+        repo_file_pairs.append([home_path, filepath])
+
+        # Update directory-tracking data.
+        copy_paths_by_home_subpath = _copy_dirs_by_home.setdefault(home_info[0], {})
+        copy_info_by_copy_path = copy_paths_by_home_subpath.setdefault(home_subpath, {})
+        filedir = os.path.dirname(filepath)
+        home_dir_path = os.path.dirname(home_path)
+        default_copy_info = {'tracking': True, 'home_path': home_dir_path}
+        # It's important that same dict is used twice here; if we edit it later from either source,
+        # the data changes in both structures - that indexed by home, and that indexed by copy.
+        copy_info_by_copy_path.setdefault(filedir, default_copy_info)
+        _copy_info_by_copy_path.setdefault(filedir, default_copy_info)
   return repo_file_pairs
 
 def _debug_show_known_diffs():
@@ -515,7 +533,7 @@ def _check_for_home_info(filepath):
     return home_info
 
 # A cache to avoid redundant os.walk calls.
-# _subpaths_of_root[root][base] = [path]
+# _subpaths_of_root[root][base] = [(path, subpath)]
 # This is used in _get_all_subpaths.
 _subpaths_of_root = {}
 
@@ -528,18 +546,19 @@ def _get_all_subpaths(root):
   subpaths = {}
   for path, dirs, files in os.walk(root):
     dirs = [d for d in dirs if not _should_skip_dir(d)]
-    for f in files: subpaths.setdefault(f, []).append(path + os.sep + f)
+    subpath = path[len(root) + 1:]
+    for f in files: subpaths.setdefault(f, []).append((path + os.sep + f, subpath))
   _subpaths_of_root[root] = subpaths
   return subpaths
 
 # _known_home_paths[(home_repo, home_subdir, base)] = home_path
-# This is used in _find_file_path.
+# This is used in _find_home_path.
 _known_home_paths = {}
 
 # Takes a [home_repo, home_subdir] pair as returned from _check_for_home_info,
 # and resolves a file path for the home version. Emits a warning if
 # multiple files match the given home_info.
-def _find_file_path(home_info, filepath):
+def _find_home_path(home_info, filepath):
   global _repos, _known_home_paths
   for name, root in _repos:
     if home_info[0] == name:
@@ -553,8 +572,9 @@ def _find_file_path(home_info, filepath):
     if not os.path.isfile(home_path):
       print('Error: %s pointed to home version %s, but it doesn\'t exist.' % (filepath, home_path))
       return None
-    _known_home_paths[key] = home_path
-    return home_path
+    val = (home_path, home_info[1])
+    _known_home_paths[key] = val
+    return val
   # Handle the case that no subdir was given; we must walk the dir to find it.
   subpaths = _get_all_subpaths(home_root)
   if base not in subpaths:
@@ -565,7 +585,7 @@ def _find_file_path(home_info, filepath):
     print('Warning: found multiple home paths for %s, listed below:' % filepath)
     for path in basepaths: print('    %s' % path)
   _known_home_paths[key] = basepaths[0]
-  return basepaths[0]
+  return basepaths[0]  # This is a (path, subpath) tuple.
 
 # Internally compares the given files; "internally" means we don't show the user yet.
 # The results are stored in _diffs_by_home_path and _paths_by_basename.
