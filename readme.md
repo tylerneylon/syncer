@@ -15,6 +15,9 @@ repo, or in a secondary location that uses a copy of
 the original file. These edits become easy to notice
 and copy over, or merge by hand with the help of a diff.
 
+`syncer` is designed to be easy to use and invisible to
+end users.
+
 ## Use
 
 The primary task of `syncer` is to track git repos that
@@ -25,10 +28,15 @@ the files.
 
 Here's a brief summary of the available actions:
 ```
-syncer track <repo-name>      # Track the current dir with the given repo name (e.g., a github url).
+syncer track <repo-name>      # Track the current dir with the given repo name
+                              #     (a name may be, e.g., a github url).
 syncer track <file1> <file2>  # Track the given file pair.
-syncer check                  # Check all known repo-name/dir and file/file pairs for differences.
-syncer remind                 # Print all paths affected by last run of "syncer check".
+syncer check                  # Check current repo for any incoming out outgoing
+                              #     file changes.
+syncer check --all            # Check all known repo-name/dir and file/file pairs
+                              #     for differences.
+syncer remind                 # Print all paths affected by last run of
+                              #     "syncer check"; useful for testing.
 syncer list                   # Print all file pairs checked for equality.
 ```
 
@@ -76,6 +84,12 @@ copies of `my_png_reader.h` are not identical, and notice which one
 is newer. It will show you the diff and give you the option of copying
 over the file, or of saving the diff to a file in case you need to
 manually make nuanced changes.
+
+By default, `syncer check` works quickly by only looking for changes
+created by or affecting the directory it's run from. If you want to
+simultaneously synchronize across all your repos, you can instead run:
+
+    $ syncer check --all
 
 ### -- `remind` action
 
@@ -127,7 +141,7 @@ with subtrees of your directory structure that it calls "repos," but
 they could be any subtree. This is partially a result of the design
 goal being an ultra-lightweight, highly transparent tool.
 
-All metadata is kept in the human-friendly `~/.syncer` file, which
+All metadata is kept in human-friendly files in the `~/.syncer` directory, which
 you are free to hand edit.
 
 ## Installation
@@ -150,7 +164,7 @@ building; C users may not be familiar with `npm`,
 and `npm` is more focused on node.js use cases.
 
 `syncer` is a choice that maximizes transparency.
-It depends on a single comment line in the source
+It depends on a single comment line -- specifically, the 3rd line -- in the source
 files you want to be tracked, but otherwise keeps all
-of its metadata in a small, human-friendly text
-file at `~/.syncer`, which you are free to hand edit.
+of its metadata in a small human-friendly text
+files in the `~/.syncer` directory, which you are free to hand edit.
