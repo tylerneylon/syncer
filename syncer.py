@@ -11,7 +11,7 @@
   syncer list                   # Print all file pairs checked for equality.
 """
 #
-# Metadata is stored in the human-friendly file ~/.syncer
+# Metadata is stored in human-friendly files in the directory ~/.syncer
 # More details are in readme.md.
 #
 
@@ -91,12 +91,15 @@ _cached_info_by_path = {}
 _do_use_local_repo = False
 _local_repo_path   = None
 
-# _copy_dirs_by_home[home_name][home_subpath][copy_path] = <copy_info>
-#     <copy_info> = {tracking: <bool>, home_path: <str>, excluded: <set>}
+# _copy_dirs[home_name][copy_path] = <copy_info>
+#     <copy_info> = {tracking: <bool>, copy_path, home_path, home_root, excluded: <set>}
+# Both copy_path and home_path are absolute paths to directories.
 # The excluded set contains subpaths s so that copy_path/s is an excluded dir or file.
-_copy_dirs_by_home = {}
-# _copy_info_by_copy_path[copy_path] = <copy_info>
-_copy_info_by_copy_path = {}
+_copy_dirs = {}
+_copy_dirs_header = 'copied directories (home name -> copy path [-> copy info])'
+
+# This is a map from (here_path, gone_path) to the relevant copy_info.
+_gone_file_metadata = {}
 
 _unknown_home_path = '(unknown home path)'
 
@@ -239,22 +242,43 @@ def _find_repo_file_pairs():
         filepath = os.path.join(path, filename)
         home_info = _check_for_home_info(filepath)
         if home_info is None:    continue
-        if home_info[0] == name: continue
+        filedir = os.path.dirname(filepath)
+
+        # Check to see if this file is missing in a copy directory.
+        if home_info[0] == name:
+          if name not in _copy_dirs: continue
+          for copy_path, copy_info in _copy_dirs[name].items():
+            if not copy_info['tracking']: continue
+            copys_home_path = copy_info['home_path']
+            if not filedir.startswith(copys_home_path): continue
+            subpath = filepath[len(copys_home_path) + 1:]
+            if _is_rel_path_excluded(subpath, copy_info): continue
+            # Check if the copy's version of the file exists.
+            copy_file_path = os.path.join(copy_path, subpath)
+            if os.path.isfile(copy_file_path): continue
+            repo_file_pairs.append([filepath, copy_file_path])
+            key = (filepath, copy_file_path)
+            _gone_file_metadata[key] = copy_info
+          continue
+
         home_path, home_subpath, was_found = _find_home_path(home_info, filepath)
         if home_path is None: continue  # An error is already printed by _find_home_path.
         repo_file_pairs.append([home_path, filepath])
 
         if was_found:
           # Update directory-tracking data.
-          copy_paths_by_home_subpath = _copy_dirs_by_home.setdefault(home_info[0], {})
-          copy_info_by_copy_path = copy_paths_by_home_subpath.setdefault(home_subpath, {})
-          filedir = os.path.dirname(filepath)
           home_dir_path = os.path.dirname(home_path)
-          default_copy_info = {'tracking': True, 'home_path': home_dir_path}
-          # It's important that same dict is used twice here; if we edit it later from either source,
-          # the data changes in both structures - that indexed by home, and that indexed by copy.
+          home_root = home_path[:len(home_path) - len(home_subpath) - len(filename) - 2]
+          default_copy_info = {'tracking': True, 'excluded': set(),
+                               'home_path': home_dir_path, 'home_root': home_root,
+                               'copy_path': filedir}
+          copy_info_by_copy_path = _copy_dirs.setdefault(home_info[0], {})
+          if filedir in copy_info_by_copy_path:
+            if copy_info_by_copy_path[filedir]['home_path'] != default_copy_info['home_path']:
+              print('Warning: multiple home directories from a single repo mapped into single',
+                    'copy dir %s;' % filedir,
+                    'syncer may not correctly handle file additions/deletions in this case.')
           copy_info_by_copy_path.setdefault(filedir, default_copy_info)
-          _copy_info_by_copy_path.setdefault(filedir, default_copy_info)
   return repo_file_pairs
 
 def _debug_show_known_diffs():
@@ -331,10 +355,10 @@ def _get_uniq_subpaths(path1, path2):
   while dirs[0][pre_idx]  == dirs[1][pre_idx] : pre_idx  += 1
   while dirs[0][post_idx] == dirs[1][post_idx]: post_idx -= 1
   uniqs = [d[pre_idx:post_idx + 1] for d in dirs]
-  for i in range(len(uniqs)):
-    # Handle the special case that paths are of the form [ABC, AC].
-    if len(uniqs[i]) == 0: uniqs[i] = dirs[i][pre_idx:post_idx + 2]
-    uniqs[i] = os.path.join(*uniqs[i])
+  # Handle the special case that paths are of the form [ABC, AC].
+  if any([len(u) == 0 for u in uniqs]):
+    uniqs = [d[max(pre_idx - 1, 0):-1] for d in dirs]
+  for i in range(len(uniqs)): uniqs[i] = os.path.join(*uniqs[i])
   return tuple(uniqs)
 
 # Returns a comparison result string based on the files' timestamps.
@@ -376,6 +400,13 @@ def _show_and_let_user_act_on_diffs():
 
 def _let_user_handle_add_or_delete_diff(home_path, home_exists, copy_path, copy_exists):
   here_path, gone_path = (home_path, copy_path) if home_exists else (copy_path, home_path)
+
+  mdata_key = (here_path, gone_path)
+  if mdata_key in _gone_file_metadata:
+    copy_info = _gone_file_metadata[mdata_key]
+    if not copy_info['tracking']:  # The user may have just turned off tracking here.
+      print('(A file connection for this file was recently untracked.)')
+      return
 
   # Build and print diff strings.
   diff_strs = []
@@ -451,19 +482,40 @@ def _let_user_act_on_add_or_delete_diff(here_path, gone_path, diff):
   global _changed_paths
   print(_horiz_break)
   here_short, gone_short = _short_names(here_path, gone_path)
+
+  copy_info    = None
+  untrack_str  = ''
+  extra_chars  = ''
+  metadata_key = (here_path, gone_path)
+  if metadata_key in _gone_file_metadata:
+    copy_info = _gone_file_metadata[metadata_key]
+    copy_dir, home_dir = copy_info['copy_path'], copy_info['home_path']
+    untrack_str = '  [u]ntrack copy dir %s from home dir %s;\n' % (copy_dir, home_dir)
+    extra_chars += 'u'
+    if here_path.startswith(copy_info['home_path']):
+      untrack_str += '  e[x]clude this file from the copied dir;\n'
+      extra_chars += 'x'
   fmt  = 'Actions:\n'
   fmt += '  [a]dd %s as %s;\n'
   fmt += '  [d]elete %s;\n'
+  fmt += untrack_str
   fmt += '  [s]kip this file; [w]rite diff file and quit; [q]uit.'
   print(fmt % (here_short, gone_short, here_short))
   print('What would you like to do?')
-  c = _wait_for_key_in_list(list('adws'))
+  c = _wait_for_key_in_list(list('adws' + extra_chars))
   if c == 'a':
     _copy_src_to_dst_and_update_metadata(here_path, gone_path)
     print('Added')
   if c == 'd':
     _delete_path_and_update_metadata(here_path)
     print('Deleted')
+  if c == 'u':
+    copy_info['tracking'] = False
+    print('Untracked')
+  if c == 'x':
+    rel_path_to_gone_file = gone_path[len(copy_info['copy_path']) + 1:]
+    copy_info['excluded'].add(rel_path_to_gone_file)
+    print('File excluded')
   if c == 'w':
     base = os.path.basename(here_path).replace('.', '_')
     fname = '%s_diff.txt' % base
@@ -629,6 +681,37 @@ def _get_all_subpaths(root):
   _subpaths_of_root[root] = subpaths
   return subpaths
 
+# This expects path to be a relative path.
+def _is_rel_path_excluded(path, copy_info):
+  head, tail = path, ''
+  while len(head) > 1:  # This may end when head == '/'.
+    if head in copy_info['excluded']:
+      return True
+    head, start_of_new_tail = os.path.split(head)
+    tail = os.path.join(start_of_new_tail, tail)
+  return False
+
+# This uses the directory tracking data to determine a (home_path, home_subpath) for the given
+# file's copy_path. This returns None, None if no home_path could be found.
+def _get_tracked_home_path(copy_path, home_name):
+  if home_name not in _copy_dirs: return None, None
+  copy_info_of_copy_path = _copy_dirs[home_name]
+  head, tail = os.path.split(copy_path)
+  while len(head) > 1:  # We end when head == '/'.
+    if head not in copy_info_of_copy_path:
+      head, start_of_new_tail = os.path.split(head)
+      tail = os.path.join(start_of_new_tail, tail)
+      continue
+    copy_info = copy_info_of_copy_path[head]
+    if _is_rel_path_excluded(tail, copy_info):
+      return None, None
+    home_dir_head = copy_info['home_path']
+    home_root     = copy_info['home_root']
+    home_path     = os.path.join(home_dir_head, tail)
+    home_subpath  = os.path.dirname(home_path[len(home_root) + 1:])
+    return home_path, home_subpath
+  return None, None  # No tracking copy_info exists for this copy_path.
+
 # _known_home_paths[(home_repo, home_subdir, base)] = home_path
 # This is used in _find_home_path.
 _known_home_paths = {}
@@ -645,7 +728,8 @@ def _find_home_path(home_info, filepath):
       break
   base = os.path.basename(filepath)
   key = (home_info[0], home_info[1], base)
-  if key in _known_home_paths: return _known_home_paths[key]
+  if key in _known_home_paths:
+    return _known_home_paths[key]
   if home_info[1]:
     home_path = os.path.join(home_root, home_info[1], base)
     if not os.path.isfile(home_path):
@@ -653,17 +737,21 @@ def _find_home_path(home_info, filepath):
     val = (home_path, home_info[1], True)
     _known_home_paths[key] = val
     return val
+  home_path, home_subpath = _get_tracked_home_path(filepath, home_info[0])
+  if home_path:
+    val = (home_path, home_subpath, os.path.isfile(home_path))
+    _known_home_paths[key] = val
+    return val
   # Handle the case that no subdir was given; we must walk the dir to find it.
   subpaths = _get_all_subpaths(home_root)
   if base not in subpaths:
-    print('Error: no home path found for %s' % filepath)
-    return None
+    return _unknown_home_path, None, False  # None, False --> home_subpath, was_found
   basepaths = subpaths[base]
   if len(basepaths) > 1:
     print('Warning: found multiple home paths for %s, listed below:' % filepath)
     for path in basepaths: print('    %s' % path)
   _known_home_paths[key] = basepaths[0]
-  return basepaths[0]  # This is a (path, subpath) tuple.
+  return basepaths[0]  # This is a (path, subpath, True) tuple.
 
 # Internally compares the given files; "internally" means we don't show the user yet.
 # The results are stored in _diffs_by_home_path and _paths_by_basename.
@@ -757,6 +845,53 @@ def _load_cached_info():
           else:
             info[key] = tuple([int(t) for t in line.split(' ')])
 
+def _load_copy_dirs():
+  global _copy_dirs
+  file_path = os.path.join(_config_path, 'copy_dirs')
+  if not os.path.isfile(file_path): return
+  home_name = None
+  copy_path = None
+  copy_info = {'excluded': set()}
+  def save_copy_info_if_needed(home_name, copy_path, copy_info):
+    global _copy_dirs
+    if 'home_path' not in copy_info: return copy_info
+    _copy_dirs.setdefault(home_name, {})[copy_path] = copy_info
+    return {'excluded': set(),
+            'home_root': copy_info['home_root'],
+            'copy_path': copy_path}
+  with open(file_path, 'r') as f:
+    for line in f:
+      if line.startswith(_copy_dirs_header):
+        continue
+      m = re.match(r'  \S.*', line) # Capture home_name.
+      if m:
+        copy_info = save_copy_info_if_needed(home_name, copy_path, copy_info)
+        home_name = m.group(0).strip()
+        for name, root in _repos:
+          if name == home_name:
+            copy_info['home_root'] = root
+            break
+        if 'home_root' not in copy_info: print('home_root not found :\'(')
+        continue
+      m = re.match(r'    ([+-]) (\S.*)', line)  # Capture copy_path.
+      if m:
+        copy_info = save_copy_info_if_needed(home_name, copy_path, copy_info)
+        copy_info['tracking'] = (m.group(1) == '+')
+        copy_path = m.group(2)
+        copy_info['copy_path'] = copy_path
+        continue
+      m = re.match(r'      home_path (\S.*)', line)  # Capture home_path.
+      if m:
+        copy_info['home_path'] = m.group(1)
+        continue
+      m = re.match(r'      - (\S.*)', line)  # Capture home_path.
+      if m:
+        copy_info['excluded'].add(m.group(1))
+        continue
+      print('Warning: unable to parse the following line from %s' % file_path)
+      print(line)
+  copy_info = save_copy_info_if_needed(home_name, copy_path, copy_info)
+
 def _load_config():
   if not os.path.isdir(_config_path): return  # First run; empty lists are ok.
   adding_to = None
@@ -764,6 +899,7 @@ def _load_config():
   _load_file_connections()
   _load_changed_paths()
   _load_cached_info()
+  _load_copy_dirs()
 
 def _save_file_connections():
   file_path = os.path.join(_config_path, 'file_connections')
@@ -797,6 +933,20 @@ def _save_cached_info():
         f.write('    %s\n' % ((':' + item) if item else 'None'))
       f.write('    %d %d\n' % info['times'])
 
+def _save_copy_dirs():
+  global _copy_dirs
+  file_path = os.path.join(_config_path, 'copy_dirs')
+  with open(file_path, 'w') as f:
+    f.write(_copy_dirs_header + '\n')
+    for home_name, copy_info_by_path in _copy_dirs.items():
+      f.write('  %s\n' % home_name)
+      for copy_path, copy_info in copy_info_by_path.items():
+        f.write('    %s %s\n' % ('+' if copy_info['tracking'] else '-', copy_path))
+        f.write('      home_path %s\n' % copy_info['home_path'])
+        for excluded_path in copy_info['excluded']:
+          f.write('      - %s\n' % excluded_path)
+
+
 # Save the current config data. This is the data kept in
 # _repos, _pairs, and _changed_paths.
 def _save_config():
@@ -804,6 +954,7 @@ def _save_config():
   _save_file_connections()
   _save_changed_paths()
   _save_cached_info()
+  _save_copy_dirs()
 
 
 # input functions
