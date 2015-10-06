@@ -586,6 +586,9 @@ def _wait_for_key_in_list(ok_chars):
 def _copy_src_to_dst(src, dst, preserve_line3=False):
   global _changed_paths
   if not preserve_line3:
+    dst_dir = os.path.dirname(dst)
+    if not os.path.exists(dst_dir):
+      os.makedirs(dst_dir)
     shutil.copy2(src, dst)
     return
   # Preserve line 3.
